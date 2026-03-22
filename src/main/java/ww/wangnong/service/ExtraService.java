@@ -19,9 +19,9 @@ public interface ExtraService {
 
     TraceabilityResult scanTraceability(String code);
 
-    LiveStreamInfo getCameraLive(String deviceId);
+    LiveStreamInfo getCameraLive(String nodeId);
 
-    List<PlaybackItem> getCameraPlayback(String deviceId, String date);
+    List<PlaybackItem> getCameraPlayback(String nodeId, String date);
 
-    List<KeyframeItem> getCameraKeyframes(String deviceId, String date);
+    List<KeyframeItem> getCameraKeyframes(String nodeId, String date);
 }

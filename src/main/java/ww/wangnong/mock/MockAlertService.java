@@ -38,7 +38,7 @@ public class MockAlertService implements AlertService {
 
         Alert entity = new Alert();
         entity.setAlertId(info.alertId());
-        entity.setDeviceId(info.deviceId());
+        entity.setNodeId(info.nodeId());
         entity.setType(info.type());
         entity.setTypeName(info.typeName());
         entity.setLevel(info.level());
@@ -109,7 +109,7 @@ public class MockAlertService implements AlertService {
         Long ht = a.getHandleTime() != null
                 ? a.getHandleTime().atZone(ZoneId.systemDefault()).toInstant().toEpochMilli()
                 : null;
-        return new AlertInfo(a.getAlertId(), a.getDeviceId(), a.getType(), a.getTypeName(),
+        return new AlertInfo(a.getAlertId(), a.getNodeId(), a.getType(), a.getTypeName(),
                 a.getLevel(), a.getMessage(), a.getSource(), a.getSourceName(),
                 a.getIsHandled(), ht, ts);
     }

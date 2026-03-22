@@ -16,7 +16,7 @@ public interface SensorService {
 
     record EquipmentStatsResult(Map<String, Object> summary, List<StatsPoint> points) {}
 
-    SensorHistoryResult getSensorHistory(String deviceId, String metric, String range);
+    SensorHistoryResult getSensorHistory(String nodeId, String metric, String range);
 
-    EquipmentStatsResult getEquipmentStats(String deviceId, String equipmentKey);
+    EquipmentStatsResult getEquipmentStats(String nodeId, String equipmentKey);
 }

@@ -44,6 +44,9 @@ public class User {
     @Column(name = "avatar_src", length = 500)
     private String avatarSrc;
 
+    @Column(nullable = false, length = 20)
+    private String role = "user";
+
     @CreationTimestamp
     @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt;

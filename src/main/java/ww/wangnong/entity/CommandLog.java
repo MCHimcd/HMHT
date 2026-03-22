@@ -24,8 +24,8 @@ public class CommandLog {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @Column(name = "device_id", nullable = false, length = 50)
-    private String deviceId;
+    @Column(name = "node_id", nullable = false, length = 50)
+    private String nodeId;
 
     @Column(name = "user_id")
     private Long userId;

@@ -41,7 +41,7 @@ public class InfluxSensorService implements SensorService {
     }
 
     @Override
-    public SensorHistoryResult getSensorHistory(String deviceId, String metric, String range) {
+    public SensorHistoryResult getSensorHistory(String nodeId, String metric, String range) {
         String interval;
         String rangeFilter;
         DateTimeFormatter fmt;
@@ -67,9 +67,9 @@ public class InfluxSensorService implements SensorService {
         // Query aggregated data from InfluxDB using SQL
         String sql = String.format(
                 "SELECT date_bin('%s', time) AS t, AVG(\"%s\") AS val "
-                        + "FROM environment WHERE device = '%s' AND %s "
+                        + "FROM environment WHERE node = '%s' AND %s "
                         + "GROUP BY 1 ORDER BY 1",
-                interval, sanitizeMetric(metric), sanitizeTag(deviceId), rangeFilter);
+                interval, sanitizeMetric(metric), sanitizeTag(nodeId), rangeFilter);
 
         try (Stream<Object[]> stream = influxClient.query(sql, new QueryOptions("", QueryType.SQL))) {
             List<HistoryPoint> points = new ArrayList<>();
@@ -105,7 +105,7 @@ public class InfluxSensorService implements SensorService {
     }
 
     @Override
-    public EquipmentStatsResult getEquipmentStats(String deviceId, String equipmentKey) {
+    public EquipmentStatsResult getEquipmentStats(String nodeId, String equipmentKey) {
         Map<String, String> units = Map.of(
                 "water_pump", "灌溉量(升)",
                 "led_light", "补光时长(H)",
@@ -121,9 +121,9 @@ public class InfluxSensorService implements SensorService {
                 "SELECT date_bin('1 day', time) AS t, "
                         + "SUM(CASE WHEN status = 'on' THEN 1 ELSE 0 END) AS on_count "
                         + "FROM equipment_state "
-                        + "WHERE device = '%s' AND equipment = '%s' AND time >= now() - 7d "
+                        + "WHERE node = '%s' AND equipment = '%s' AND time >= now() - 7d "
                         + "GROUP BY 1 ORDER BY 1",
-                sanitizeTag(deviceId), sanitizeTag(equipmentKey));
+                sanitizeTag(nodeId), sanitizeTag(equipmentKey));
 
         try (Stream<Object[]> stream = influxClient.query(sql, new QueryOptions("", QueryType.SQL))) {
             List<StatsPoint> points = new ArrayList<>();

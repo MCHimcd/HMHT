@@ -26,20 +26,20 @@ public class ExtraController {
         return ApiResponse.ok(extraService.scanTraceability(req.code()));
     }
 
-    @GetMapping("/v1/cameras/{deviceId}/live")
-    public ApiResponse<?> getCameraLive(@PathVariable String deviceId) {
-        return ApiResponse.ok(extraService.getCameraLive(deviceId));
+    @GetMapping("/v1/cameras/{nodeId}/live")
+    public ApiResponse<?> getCameraLive(@PathVariable String nodeId) {
+        return ApiResponse.ok(extraService.getCameraLive(nodeId));
     }
 
-    @GetMapping("/v1/cameras/{deviceId}/playback")
-    public ApiResponse<?> getPlayback(@PathVariable String deviceId,
+    @GetMapping("/v1/cameras/{nodeId}/playback")
+    public ApiResponse<?> getPlayback(@PathVariable String nodeId,
                                       @RequestParam(required = false) String date) {
-        return ApiResponse.ok(extraService.getCameraPlayback(deviceId, date));
+        return ApiResponse.ok(extraService.getCameraPlayback(nodeId, date));
     }
 
-    @GetMapping("/v1/cameras/{deviceId}/keyframes")
-    public ApiResponse<?> getKeyframes(@PathVariable String deviceId,
+    @GetMapping("/v1/cameras/{nodeId}/keyframes")
+    public ApiResponse<?> getKeyframes(@PathVariable String nodeId,
                                        @RequestParam(required = false) String date) {
-        return ApiResponse.ok(extraService.getCameraKeyframes(deviceId, date));
+        return ApiResponse.ok(extraService.getCameraKeyframes(nodeId, date));
     }
 }

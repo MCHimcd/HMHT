@@ -135,7 +135,7 @@ public class MockAuthService implements AuthService {
         codeRepo.save(vc);
     }
 
-    private User requireUser(String token) {
+    public User requireUser(String token) {
         Long userId = tokenToUserId.get(token);
         if (userId == null) throw new BizException(401, "未登录或 token 已过期");
         return userRepo.findById(userId)
@@ -147,6 +147,14 @@ public class MockAuthService implements AuthService {
                 "WangNong_" + String.format("%03d", u.getId()),
                 u.getUserName(), u.getPhone(), u.getGender(),
                 u.getBirthDate() != null ? u.getBirthDate().toString() : null,
-                u.getAvatarSrc());
+                u.getAvatarSrc(), u.getRole());
+    }
+
+    public User requireAdmin(String token) {
+        User user = requireUser(token);
+        if (!"admin".equals(user.getRole())) {
+            throw new BizException(403, "需要管理员权限");
+        }
+        return user;
     }
 }

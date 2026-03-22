@@ -16,20 +16,16 @@ public class MockSensorService implements SensorService {
 
     private static final Random RNG = new Random();
 
-    private static final Map<String, double[]> BASE_VALUES = Map.ofEntries(
-            Map.entry("temperature", new double[]{25.0, 3.0}),
-            Map.entry("humidity", new double[]{60.0, 10.0}),
-            Map.entry("light", new double[]{10000.0, 2000.0}),
-            Map.entry("co2", new double[]{400.0, 50.0}),
-            Map.entry("soilTemp", new double[]{20.0, 2.0}),
-            Map.entry("soilHumidity", new double[]{40.0, 5.0}),
-            Map.entry("soilPh", new double[]{6.5, 0.5}),
-            Map.entry("soilN", new double[]{45.0, 10.0}),
-            Map.entry("soilP", new double[]{30.0, 8.0}),
-            Map.entry("soilK", new double[]{180.0, 30.0}));
+    private static final Map<String, double[]> BASE_VALUES = Map.of(
+            "temperature", new double[]{25.0, 3.0},
+            "humidity", new double[]{60.0, 10.0},
+            "light", new double[]{10000.0, 2000.0},
+            "co2", new double[]{400.0, 50.0},
+            "soilTemp", new double[]{20.0, 2.0},
+            "soilHumidity", new double[]{40.0, 5.0});
 
     @Override
-    public SensorHistoryResult getSensorHistory(String deviceId, String metric, String range) {
+    public SensorHistoryResult getSensorHistory(String nodeId, String metric, String range) {
         double[] bv = BASE_VALUES.getOrDefault(metric, new double[]{25.0, 3.0});
         double base = bv[0], variance = bv[1];
 
@@ -68,16 +64,12 @@ public class MockSensorService implements SensorService {
     }
 
     @Override
-    public EquipmentStatsResult getEquipmentStats(String deviceId, String equipmentKey) {
+    public EquipmentStatsResult getEquipmentStats(String nodeId, String equipmentKey) {
         Map<String, String> units = Map.of(
+                "water_valve", "开阀次数",
                 "water_pump", "灌溉量(升)",
                 "led_light", "补光时长(H)",
-                "ai_camera", "识别病虫(次)",
-                "fan", "排风时长(H)",
-                "heater", "加热时长(H)",
-                "misting", "加湿次数",
-                "co2_generator", "补碳时长(H)",
-                "fertilizer", "施肥量(ml)");
+                "camera", "识别次数");
         String unit = units.getOrDefault(equipmentKey, "值");
 
         List<StatsPoint> points = new ArrayList<>();

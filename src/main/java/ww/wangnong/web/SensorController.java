@@ -21,12 +21,12 @@ public class SensorController {
         this.sensorService = sensorService;
     }
 
-    @GetMapping("/v1/sensors/{deviceId}/history")
+    @GetMapping("/v1/sensors/{nodeId}/history")
     public ApiResponse<?> getSensorHistory(
-            @PathVariable String deviceId,
+            @PathVariable String nodeId,
             @RequestParam(defaultValue = "temperature") String metric,
             @RequestParam(defaultValue = "24h") String range) {
-        return ApiResponse.ok(sensorService.getSensorHistory(deviceId, metric, range));
+        return ApiResponse.ok(sensorService.getSensorHistory(nodeId, metric, range));
     }
 
     @PostMapping("/v1/equipment/stats")
@@ -36,19 +36,21 @@ public class SensorController {
                 ? (Map<String, Object>) body.get("query")
                 : Map.of();
 
-        String deviceId = firstNonBlank(
+        String nodeId = firstNonBlank(
+                str(body.get("node_id")),
+                str(query.get("node_id")),
                 str(body.get("device_id")),
                 str(query.get("device_id")),
                 "A03_Node_01");
 
-        // Frontend currently sends query.device_type; treat it as equipment_key for compatibility.
         String key = firstNonBlank(
                 str(body.get("equipment_key")),
                 str(query.get("equipment_key")),
+                str(query.get("equipment_type")),
                 str(query.get("device_type")),
                 "water_pump");
 
-        return ApiResponse.ok(sensorService.getEquipmentStats(deviceId, key));
+        return ApiResponse.ok(sensorService.getEquipmentStats(nodeId, key));
     }
 
     private static String str(Object v) {

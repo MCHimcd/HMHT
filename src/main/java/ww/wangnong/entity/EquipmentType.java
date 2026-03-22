@@ -6,24 +6,20 @@ import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
-import jakarta.persistence.UniqueConstraint;
 import lombok.Getter;
 import lombok.Setter;
 
 @Entity
-@Table(name = "equipment_meta", uniqueConstraints = @UniqueConstraint(columnNames = {"device_id", "equipment_key"}))
+@Table(name = "equipment_type")
 @Getter
 @Setter
-public class EquipmentMeta {
+public class EquipmentType {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @Column(name = "device_id", nullable = false, length = 50)
-    private String deviceId;
-
-    @Column(name = "equipment_key", nullable = false, length = 50)
+    @Column(name = "equipment_key", nullable = false, unique = true, length = 50)
     private String equipmentKey;
 
     @Column(length = 100)

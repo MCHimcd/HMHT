@@ -33,12 +33,12 @@ public class InfluxTelemetryWriter {
      * Environment fields go to "environment" measurement,
      * equipment states go to "equipment_state" measurement.
      */
-    public void writeTelemetry(String deviceId, Map<String, Object> appPayload) {
+    public void writeTelemetry(String nodeId, Map<String, Object> appPayload) {
         if (influxClient == null) {
             return;
         }
         try {
-            StringBuilder envLine = new StringBuilder("environment,device=").append(escape(deviceId)).append(' ');
+            StringBuilder envLine = new StringBuilder("environment,node=").append(escape(nodeId)).append(' ');
             Map<String, Object> envData = TelemetryTranslator.extractEnvironment(appPayload);
             boolean hasField = false;
             for (var entry : envData.entrySet()) {
@@ -58,13 +58,13 @@ public class InfluxTelemetryWriter {
                 String eqName = entry.getKey();
                 Object val = entry.getValue();
                 String status = val instanceof Boolean b ? (b ? "on" : "off") : String.valueOf(val);
-                String eqLine = "equipment_state,device=" + escape(deviceId) + ",equipment=" + escape(eqName)
+                String eqLine = "equipment_state,node=" + escape(nodeId) + ",equipment=" + escape(eqName)
                         + " status=\"" + status + "\"";
                 WriteOptions opts = new WriteOptions(null, WritePrecision.MS, null);
                 influxClient.writeRecord(eqLine, opts);
             }
         } catch (Exception e) {
-            log.warn("[InfluxWriter] Failed to write telemetry for device {}", deviceId, e);
+            log.warn("[InfluxWriter] Failed to write telemetry for node {}", nodeId, e);
         }
     }
 

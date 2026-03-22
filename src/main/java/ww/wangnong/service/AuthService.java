@@ -9,7 +9,7 @@ public interface AuthService {
     record CodeResult(@JsonProperty("expires_in") int expiresIn, @JsonProperty("test_code") String testCode) {}
 
     record Profile(String userId, String userName, String phone, String gender,
-                   String birthDate, String avatarSrc) {}
+                   String birthDate, String avatarSrc, String role) {}
 
     LoginResult login(String username, String password);
 

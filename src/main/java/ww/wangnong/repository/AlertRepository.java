@@ -13,7 +13,7 @@ public interface AlertRepository extends JpaRepository<Alert, Long> {
 
     Optional<Alert> findByAlertId(String alertId);
 
-    Page<Alert> findByDeviceIdOrderByCreatedAtDesc(String deviceId, Pageable pageable);
+    Page<Alert> findByNodeIdOrderByCreatedAtDesc(String nodeId, Pageable pageable);
 
     Page<Alert> findByIsHandledOrderByCreatedAtDesc(boolean isHandled, Pageable pageable);
 

@@ -38,7 +38,7 @@ public final class TelemetryTranslator {
     public static Map<String, Object> pyToApp(Map<String, Object> pyPayload) {
         Map<String, Object> result = new LinkedHashMap<>();
         result.put("msg_type", pyPayload.get("msg_type"));
-        result.put("device_id", pyPayload.get("device_id"));
+        result.put("node_id", pyPayload.get("device_id"));
         result.put("timestamp", pyPayload.get("timestamp"));
 
         Object dataObj = pyPayload.get("data");

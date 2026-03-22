@@ -27,8 +27,8 @@ public class Alert {
     @Column(name = "alert_id", nullable = false, unique = true, length = 50)
     private String alertId;
 
-    @Column(name = "device_id", nullable = false, length = 50)
-    private String deviceId;
+    @Column(name = "node_id", nullable = false, length = 50)
+    private String nodeId;
 
     @Column(nullable = false, length = 50)
     private String type;

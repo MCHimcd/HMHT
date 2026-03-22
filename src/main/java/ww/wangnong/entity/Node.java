@@ -19,20 +19,20 @@ import lombok.Getter;
 import lombok.Setter;
 
 @Entity
-@Table(name = "devices")
+@Table(name = "nodes")
 @Getter
 @Setter
-public class Device {
+public class Node {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @Column(name = "device_id", nullable = false, unique = true, length = 50)
-    private String deviceId;
+    @Column(name = "node_id", nullable = false, unique = true, length = 50)
+    private String nodeId;
 
-    @Column(name = "device_name", length = 100)
-    private String deviceName;
+    @Column(name = "node_name", length = 100)
+    private String nodeName;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "user_id", nullable = false)

@@ -12,13 +12,17 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Component;
 
 import jakarta.annotation.PreDestroy;
-import ww.wangnong.entity.Device;
-import ww.wangnong.entity.EquipmentMeta;
-import ww.wangnong.entity.SensorMeta;
+import ww.wangnong.entity.EquipmentType;
+import ww.wangnong.entity.Node;
+import ww.wangnong.entity.NodeEquipment;
+import ww.wangnong.entity.NodeSensor;
+import ww.wangnong.entity.SensorType;
 import ww.wangnong.entity.User;
-import ww.wangnong.repository.DeviceRepository;
-import ww.wangnong.repository.EquipmentMetaRepository;
-import ww.wangnong.repository.SensorMetaRepository;
+import ww.wangnong.repository.EquipmentTypeRepository;
+import ww.wangnong.repository.NodeEquipmentRepository;
+import ww.wangnong.repository.NodeRepository;
+import ww.wangnong.repository.NodeSensorRepository;
+import ww.wangnong.repository.SensorTypeRepository;
 import ww.wangnong.repository.UserRepository;
 
 @Component
@@ -28,19 +32,25 @@ public class MockDataLifecycle implements ApplicationRunner {
     private static final Logger log = LoggerFactory.getLogger(MockDataLifecycle.class);
 
     private final UserRepository userRepo;
-    private final DeviceRepository deviceRepo;
-    private final SensorMetaRepository sensorMetaRepo;
-    private final EquipmentMetaRepository equipmentMetaRepo;
+    private final NodeRepository nodeRepo;
+    private final SensorTypeRepository sensorTypeRepo;
+    private final NodeSensorRepository nodeSensorRepo;
+    private final EquipmentTypeRepository equipmentTypeRepo;
+    private final NodeEquipmentRepository nodeEquipmentRepo;
     private final JdbcTemplate jdbc;
 
-    public MockDataLifecycle(UserRepository userRepo, DeviceRepository deviceRepo,
-                             SensorMetaRepository sensorMetaRepo,
-                             EquipmentMetaRepository equipmentMetaRepo,
+    public MockDataLifecycle(UserRepository userRepo, NodeRepository nodeRepo,
+                             SensorTypeRepository sensorTypeRepo,
+                             NodeSensorRepository nodeSensorRepo,
+                             EquipmentTypeRepository equipmentTypeRepo,
+                             NodeEquipmentRepository nodeEquipmentRepo,
                              JdbcTemplate jdbc) {
         this.userRepo = userRepo;
-        this.deviceRepo = deviceRepo;
-        this.sensorMetaRepo = sensorMetaRepo;
-        this.equipmentMetaRepo = equipmentMetaRepo;
+        this.nodeRepo = nodeRepo;
+        this.sensorTypeRepo = sensorTypeRepo;
+        this.nodeSensorRepo = nodeSensorRepo;
+        this.equipmentTypeRepo = equipmentTypeRepo;
+        this.nodeEquipmentRepo = nodeEquipmentRepo;
         this.jdbc = jdbc;
     }
 
@@ -57,8 +67,9 @@ public class MockDataLifecycle implements ApplicationRunner {
     @PreDestroy
     public void cleanup() {
         log.info("[MockData] 正在清除数据库数据...");
-        String[] tables = {"chat_messages", "command_logs", "alerts", "sensor_meta",
-                "equipment_meta", "verification_codes", "devices", "users"};
+        String[] tables = {"chat_messages", "command_logs", "alerts", "node_sensor",
+                "node_equipment", "sensor_type", "equipment_type",
+                "verification_codes", "nodes", "users"};
         jdbc.execute("SET FOREIGN_KEY_CHECKS = 0");
         for (String table : tables) {
             jdbc.execute("TRUNCATE TABLE " + table);
@@ -68,7 +79,7 @@ public class MockDataLifecycle implements ApplicationRunner {
     }
 
     private void seed() {
-        // 1. 用户
+        // 1. 用户（普通用户 + 管理员）
         User user = new User();
         user.setPhone("13800000000");
         user.setPasswordHash("123456");
@@ -76,89 +87,116 @@ public class MockDataLifecycle implements ApplicationRunner {
         user.setGender("男");
         user.setBirthDate(LocalDate.of(1990, 1, 1));
         user.setAvatarSrc("https://example.com/avatar.jpg");
+        user.setRole("user");
         user = userRepo.save(user);
 
-        // 2. 设备
-        seedDevice(user, "A03_Node_01", "温室节点 1");
-        seedDevice(user, "A03_Node_02", "温室节点 2");
+        User admin = new User();
+        admin.setPhone("13800000001");
+        admin.setPasswordHash("admin123");
+        admin.setUserName("管理员");
+        admin.setGender("男");
+        admin.setBirthDate(LocalDate.of(1985, 6, 15));
+        admin.setRole("admin");
+        admin = userRepo.save(admin);
 
-        // 3. 传感器元数据
-        seedSensorMeta("A03_Node_01", true);
-        seedSensorMeta("A03_Node_02", false);
+        // 2. 节点
+        seedNode(user, "A03_Node_01", "温室节点 1");
+        seedNode(user, "A03_Node_02", "温室节点 2");
 
-        // 4. 执行器元数据
-        seedEquipmentMeta("A03_Node_01");
-        seedEquipmentMeta("A03_Node_02");
+        // 3. 全局传感器类型 (6 种)
+        seedSensorTypes();
+
+        // 4. 全局设备类型 (4 种)
+        seedEquipmentTypes();
+
+        // 5. 每节点传感器关联 + 阈值
+        seedNodeSensors("A03_Node_01", true);
+        seedNodeSensors("A03_Node_02", false);
+
+        // 6. 每节点设备关联
+        seedNodeEquipment("A03_Node_01");
+        seedNodeEquipment("A03_Node_02");
     }
 
-    private void seedDevice(User user, String deviceId, String name) {
-        Device d = new Device();
-        d.setDeviceId(deviceId);
-        d.setDeviceName(name);
-        d.setUser(user);
-        d.setOnline(true);
-        d.setSmartMode(false);
-        deviceRepo.save(d);
+    private void seedNode(User user, String nodeId, String name) {
+        Node n = new Node();
+        n.setNodeId(nodeId);
+        n.setNodeName(name);
+        n.setUser(user);
+        n.setOnline(true);
+        n.setSmartMode(false);
+        nodeRepo.save(n);
     }
 
-    private void seedSensorMeta(String deviceId, boolean fullThresholds) {
-        record SM(String key, String name, String unit, String icon,
-                  String badgeColor, String bgColor, Double warnMin, Double warnMax) {}
+    private void seedSensorTypes() {
+        record ST(String key, String name, String unit, String icon, String badgeColor, String bgColor) {}
 
-        List<SM> sensors = List.of(
-                new SM("temperature", "空气温度", "℃", "🌡️", "#FF7043", "#FFF3E0", 10.0, 35.0),
-                new SM("humidity", "空气湿度", "%", "💧", "#42A5F5", "#E3F2FD", 30.0, 85.0),
-                new SM("light", "光照强度", "Lux", "☀️", "#FDD835", "#FFFDE7", null, null),
-                new SM("co2", "CO₂浓度", "ppm", "🫧", "#78909C", "#ECEFF1", null, 1500.0),
-                new SM("soilTemp", "土壤温度", "℃", "🌱", "#8D6E63", "#EFEBE9",
-                        fullThresholds ? 5.0 : null, fullThresholds ? 35.0 : null),
-                new SM("soilHumidity", "土壤湿度", "%", "🪴", "#66BB6A", "#E8F5E9",
-                        fullThresholds ? 20.0 : null, fullThresholds ? 80.0 : null),
-                new SM("soilPh", "土壤pH", "", "⚗️", "#AB47BC", "#F3E5F5",
-                        fullThresholds ? 5.5 : null, fullThresholds ? 7.5 : null),
-                new SM("soilN", "土壤氮", "mg/kg", "🧪", "#26A69A", "#E0F2F1",
-                        fullThresholds ? 15.0 : null, fullThresholds ? 100.0 : null),
-                new SM("soilP", "土壤磷", "mg/kg", "🧫", "#5C6BC0", "#E8EAF6",
-                        fullThresholds ? 10.0 : null, fullThresholds ? 60.0 : null),
-                new SM("soilK", "土壤钾", "mg/kg", "⚙️", "#EF5350", "#FFEBEE",
-                        fullThresholds ? 80.0 : null, fullThresholds ? 350.0 : null));
+        List<ST> types = List.of(
+                new ST("temperature", "空气温度", "℃", "🌡️", "#FF7043", "#FFF3E0"),
+                new ST("humidity", "空气湿度", "%", "💧", "#42A5F5", "#E3F2FD"),
+                new ST("co2", "CO₂浓度", "ppm", "🫧", "#78909C", "#ECEFF1"),
+                new ST("light", "光照强度", "Lux", "☀️", "#FDD835", "#FFFDE7"),
+                new ST("soilTemp", "土壤温度", "℃", "🌱", "#8D6E63", "#EFEBE9"),
+                new ST("soilHumidity", "土壤湿度", "%", "🪴", "#66BB6A", "#E8F5E9"));
 
-        for (SM s : sensors) {
-            SensorMeta m = new SensorMeta();
-            m.setDeviceId(deviceId);
-            m.setSensorKey(s.key());
-            m.setName(s.name());
-            m.setUnit(s.unit());
-            m.setIcon(s.icon());
-            m.setBadgeColor(s.badgeColor());
-            m.setBgColor(s.bgColor());
-            m.setWarningMin(s.warnMin());
-            m.setWarningMax(s.warnMax());
-            sensorMetaRepo.save(m);
+        for (ST s : types) {
+            SensorType t = new SensorType();
+            t.setSensorKey(s.key());
+            t.setName(s.name());
+            t.setUnit(s.unit());
+            t.setIcon(s.icon());
+            t.setBadgeColor(s.badgeColor());
+            t.setBgColor(s.bgColor());
+            sensorTypeRepo.save(t);
         }
     }
 
-    private void seedEquipmentMeta(String deviceId) {
-        record EM(String key, String name, String icon, boolean ctrl) {}
+    private void seedEquipmentTypes() {
+        record ET(String key, String name, String icon, boolean ctrl) {}
 
-        List<EM> equips = List.of(
-                new EM("water_pump", "水泵", "💦", true),
-                new EM("led_light", "补光灯", "💡", true),
-                new EM("fan", "风扇", "🌀", true),
-                new EM("camera", "摄像头", "📷", false),
-                new EM("heater", "加热器", "🔥", true),
-                new EM("misting", "喷雾加湿", "🌫️", true),
-                new EM("co2_generator", "CO₂发生器", "♨️", true),
-                new EM("fertilizer", "施肥器", "🧴", true));
+        List<ET> types = List.of(
+                new ET("water_valve", "水阀", "🚿", true),
+                new ET("water_pump", "水泵", "💦", true),
+                new ET("led_light", "补光灯", "💡", true),
+                new ET("camera", "摄像头", "📷", false));
 
-        for (EM e : equips) {
-            EquipmentMeta m = new EquipmentMeta();
-            m.setDeviceId(deviceId);
-            m.setEquipmentKey(e.key());
-            m.setName(e.name());
-            m.setIcon(e.icon());
-            m.setControllable(e.ctrl());
-            equipmentMetaRepo.save(m);
+        for (ET e : types) {
+            EquipmentType t = new EquipmentType();
+            t.setEquipmentKey(e.key());
+            t.setName(e.name());
+            t.setIcon(e.icon());
+            t.setControllable(e.ctrl());
+            equipmentTypeRepo.save(t);
+        }
+    }
+
+    private void seedNodeSensors(String nodeId, boolean fullThresholds) {
+        record NS(String key, Double warnMin, Double warnMax) {}
+
+        List<NS> sensors = List.of(
+                new NS("temperature", 10.0, 35.0),
+                new NS("humidity", 30.0, 85.0),
+                new NS("co2", null, 1500.0),
+                new NS("light", null, null),
+                new NS("soilTemp", fullThresholds ? 5.0 : null, fullThresholds ? 35.0 : null),
+                new NS("soilHumidity", fullThresholds ? 20.0 : null, fullThresholds ? 80.0 : null));
+
+        for (NS s : sensors) {
+            NodeSensor ns = new NodeSensor();
+            ns.setNodeId(nodeId);
+            ns.setSensorKey(s.key());
+            ns.setWarningMin(s.warnMin());
+            ns.setWarningMax(s.warnMax());
+            nodeSensorRepo.save(ns);
+        }
+    }
+
+    private void seedNodeEquipment(String nodeId) {
+        for (String key : List.of("water_valve", "water_pump", "led_light", "camera")) {
+            NodeEquipment ne = new NodeEquipment();
+            ne.setNodeId(nodeId);
+            ne.setEquipmentKey(key);
+            nodeEquipmentRepo.save(ne);
         }
     }
 }

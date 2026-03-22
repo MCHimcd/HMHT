@@ -9,7 +9,7 @@ import com.fasterxml.jackson.databind.annotation.JsonNaming;
 public interface AlertService {
 
     @JsonNaming(PropertyNamingStrategies.SnakeCaseStrategy.class)
-    record AlertInfo(String alertId, String deviceId, String type, String typeName,
+    record AlertInfo(String alertId, String nodeId, String type, String typeName,
                      String level, String message, String source, String sourceName,
                      boolean isHandled, Long handleTime, long timestamp) {}
 

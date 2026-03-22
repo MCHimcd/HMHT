@@ -19,20 +19,20 @@ public class MockExtraService implements ExtraService {
     }
 
     @Override
-    public LiveStreamInfo getCameraLive(String deviceId) {
+    public LiveStreamInfo getCameraLive(String nodeId) {
         return new LiveStreamInfo(
-                deviceId,
-                "温室摄像头 " + deviceId,
+                nodeId,
+                "温室摄像头 " + nodeId,
                 "online",
                 "HLS",
                 "1920x1080",
                 LocalDateTime.now().format(DateTimeFormatter.ISO_LOCAL_DATE_TIME),
-                "https://example.com/live/" + deviceId + ".m3u8"
+                "https://example.com/live/" + nodeId + ".m3u8"
         );
     }
 
     @Override
-    public List<PlaybackItem> getCameraPlayback(String deviceId, String date) {
+    public List<PlaybackItem> getCameraPlayback(String nodeId, String date) {
         String d = (date == null || date.isBlank()) ? LocalDate.now().toString() : date;
         return List.of(
                 new PlaybackItem("pb-001", d, "00:30:00", "1080p", true, 1),
@@ -41,13 +41,13 @@ public class MockExtraService implements ExtraService {
     }
 
     @Override
-    public List<KeyframeItem> getCameraKeyframes(String deviceId, String date) {
+    public List<KeyframeItem> getCameraKeyframes(String nodeId, String date) {
         String d = (date == null || date.isBlank()) ? LocalDate.now().toString() : date;
         return List.of(
                 new KeyframeItem("kf-001", d + "T09:30:00", "叶片发黄", 0.87,
-                        "thumb://" + deviceId + "/1", true, "叶片异常", "warning"),
+                        "thumb://" + nodeId + "/1", true, "叶片异常", "warning"),
                 new KeyframeItem("kf-002", d + "T14:20:00", "虫害疑似", 0.78,
-                        "thumb://" + deviceId + "/2", true, "虫害预警", "critical")
+                        "thumb://" + nodeId + "/2", true, "虫害预警", "critical")
         );
     }
 }

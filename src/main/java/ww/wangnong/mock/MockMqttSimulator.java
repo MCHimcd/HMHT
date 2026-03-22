@@ -24,9 +24,9 @@ public class MockMqttSimulator {
     private static final Random RNG = new Random();
     private static final ObjectMapper MAPPER = new ObjectMapper();
 
-    private static final String DEVICE_ID = "A03_Node_01";
-    private static final String TELEMETRY_TOPIC = "/wangnong_2026/device/" + DEVICE_ID + "/telemetry";
-    private static final String COMMAND_TOPIC = "/wangnong_2026/device/+/command";
+    private static final String NODE_ID = "A03_Node_01";
+    private static final String TELEMETRY_TOPIC = "/wangnong_2026/node/" + NODE_ID + "/telemetry";
+    private static final String COMMAND_TOPIC = "/wangnong_2026/node/+/command";
 
     private final PahoMqttService mqttService;
 
@@ -42,19 +42,11 @@ public class MockMqttSimulator {
         environment.put("co2", 400.0);
         environment.put("soilTemp", 20.0);
         environment.put("soilHumidity", 40.0);
-        environment.put("soilPh", 6.5);
-        environment.put("soilN", 45.0);
-        environment.put("soilP", 30.0);
-        environment.put("soilK", 180.0);
 
+        equipment.put("water_valve", false);
         equipment.put("water_pump", false);
         equipment.put("led_light", false);
-        equipment.put("fan", false);
         equipment.put("camera", false);
-        equipment.put("heater", false);
-        equipment.put("misting", false);
-        equipment.put("co2_generator", false);
-        equipment.put("fertilizer", false);
     }
 
     @PostConstruct
@@ -81,10 +73,6 @@ public class MockMqttSimulator {
         fluctuate("co2", 5.0, 200.0, 2000.0);
         fluctuate("soilTemp", 0.2, 5.0, 40.0);
         fluctuate("soilHumidity", 0.5, 10.0, 90.0);
-        fluctuate("soilPh", 0.05, 4.0, 9.0);
-        fluctuate("soilN", 2.0, 10.0, 120.0);
-        fluctuate("soilP", 1.5, 5.0, 80.0);
-        fluctuate("soilK", 5.0, 50.0, 400.0);
 
         Map<String, Object> data = new LinkedHashMap<>();
         data.put("environment", new LinkedHashMap<>(environment));
@@ -93,7 +81,7 @@ public class MockMqttSimulator {
 
         Map<String, Object> payload = new LinkedHashMap<>();
         payload.put("msg_type", "telemetry");
-        payload.put("device_id", DEVICE_ID);
+        payload.put("node_id", NODE_ID);
         payload.put("timestamp", System.currentTimeMillis());
         payload.put("data", data);
 

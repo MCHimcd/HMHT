@@ -39,10 +39,10 @@ public class MqttBridge {
     private static final String PY_ACK = "/agri/device/+/ack";
 
     // App-side topic patterns
-    private static final String APP_COMMAND = "/wangnong_2026/device/+/command";
+    private static final String APP_COMMAND = "/wangnong_2026/node/+/command";
 
     // Topic prefixes
-    private static final String APP_TOPIC_PREFIX = "/wangnong_2026/device/";
+    private static final String APP_TOPIC_PREFIX = "/wangnong_2026/node/";
     private static final String PY_TOPIC_PREFIX = "/agri/device/";
 
     private final PahoMqttService mqtt;
@@ -62,14 +62,14 @@ public class MqttBridge {
             try {
                 Map<String, Object> pyPayload = MAPPER.readValue(msg.payload(), MAP_TYPE);
                 Map<String, Object> appPayload = TelemetryTranslator.pyToApp(pyPayload);
-                String deviceId = String.valueOf(appPayload.get("device_id"));
+                String nodeId = String.valueOf(appPayload.get("node_id"));
 
                 // Publish to App topic
-                String appTopic = APP_TOPIC_PREFIX + deviceId + "/telemetry";
+                String appTopic = APP_TOPIC_PREFIX + nodeId + "/telemetry";
                 mqtt.publish(appTopic, MAPPER.writeValueAsString(appPayload), 1, false);
 
                 // Write to InfluxDB
-                influxWriter.writeTelemetry(deviceId, appPayload);
+                influxWriter.writeTelemetry(nodeId, appPayload);
 
                 log.debug("[Bridge] Telemetry forwarded: {} → {}", msg.topic(), appTopic);
             } catch (Exception e) {
@@ -90,10 +90,10 @@ public class MqttBridge {
         // 3) App command → forward to Python topic
         mqtt.subscribe(APP_COMMAND, msg -> {
             try {
-                // Extract deviceId from topic: /wangnong_2026/device/{deviceId}/command
+                // Extract nodeId from topic: /wangnong_2026/node/{nodeId}/command
                 String topic = msg.topic();
                 String[] parts = topic.split("/");
-                // parts: ["", "wangnong_2026", "device", "{deviceId}", "command"]
+                // parts: ["", "wangnong_2026", "node", "{nodeId}", "command"]
                 if (parts.length < 5) return;
                 String deviceId = parts[3];
 
@@ -115,7 +115,7 @@ public class MqttBridge {
 
     @SuppressWarnings("unchecked")
     private void bridgeAiAlert(Map<String, Object> pyAlert) {
-        String deviceId = String.valueOf(pyAlert.getOrDefault("device_id", "AI_Camera_01"));
+        String nodeId = String.valueOf(pyAlert.getOrDefault("device_id", "AI_Camera_01"));
         long timestamp = pyAlert.get("timestamp") instanceof Number n ? n.longValue() : System.currentTimeMillis();
 
         Object vrObj = pyAlert.get("vision_result");
@@ -127,7 +127,7 @@ public class MqttBridge {
 
         String diseaseName = String.valueOf(visionResult.getOrDefault("disease_name", "unknown"));
         String healthStatus = String.valueOf(visionResult.getOrDefault("health_status", ""));
-        double confidence = visionResult.get("confidence") instanceof Number n ? n.doubleValue() : 0.0;
+        double confidence = visionResult.get("confidence") instanceof Number n2 ? n2.doubleValue() : 0.0;
         String recommendation = String.valueOf(pyAlert.getOrDefault("recommendation", ""));
 
         // Map to alert fields
@@ -151,13 +151,13 @@ public class MqttBridge {
                 : recommendation;
 
         AlertInfo alertInfo = new AlertInfo(
-                alertId, deviceId, type, typeName, level,
+                alertId, nodeId, type, typeName, level,
                 message, "ai_vision", "AI视觉分析",
                 false, null, timestamp);
 
         alertService.addAlert(alertInfo);
 
-        // Publish to App alert topic (use first device as relay)
+        // Publish to App alert topic
         try {
             Map<String, Object> appAlertData = new LinkedHashMap<>();
             appAlertData.put("alert_id", alertId);
@@ -173,11 +173,11 @@ public class MqttBridge {
 
             Map<String, Object> payload = new LinkedHashMap<>();
             payload.put("msg_type", "alert");
-            payload.put("device_id", deviceId);
+            payload.put("node_id", nodeId);
             payload.put("timestamp", timestamp);
             payload.put("data", appAlertData);
 
-            // Publish to the first real device topic for App to receive
+            // Publish to the first real node topic for App to receive
             String alertTopic = APP_TOPIC_PREFIX + "A03_Node_01/alert";
             mqtt.publish(alertTopic, MAPPER.writeValueAsString(payload), 1, false);
             log.info("[Bridge] AI alert bridged: {} → {}", type, alertTopic);
