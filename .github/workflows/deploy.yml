@@ -1,0 +1,88 @@
+name: Deploy Spring Boot App via SSH
+
+# ── 可改配置 1：触发分支 ─────────────────────────────────────────
+# 如需改成其他分支（如 release、prod），修改下面的 - master
+on:
+  push:
+    branches:
+      - master
+
+concurrency:
+  group: production-deploy
+  cancel-in-progress: true
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@v4
+
+      # ── 可改配置 2：JDK 版本 ──────────────────────────────────────
+      # 当前按 build.gradle 中 toolchain 配置使用 Java 21
+      - name: Setup JDK
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: gradle
+
+      - name: Make gradlew executable
+        run: chmod +x ./gradlew
+
+      # ── 可改配置 3：Gradle 构建命令 ───────────────────────────────
+      # 若需要运行测试，去掉 -x test
+      - name: Build bootJar
+        run: ./gradlew clean bootJar -x test --no-daemon
+
+      # 自动查找 build/libs 中可运行的 jar，排除 *-plain.jar
+      - name: Find built jar
+        id: find_jar
+        run: |
+          JAR_FILE=$(find build/libs -maxdepth 1 -type f -name "*.jar" ! -name "*-plain.jar" | head -n 1)
+          if [ -z "$JAR_FILE" ]; then
+            echo "::error::No runnable jar found in build/libs (excluding *-plain.jar)"
+            exit 1
+          fi
+          echo "jar_file=$JAR_FILE" >> "$GITHUB_OUTPUT"
+          echo "Found jar: $JAR_FILE"
+
+      # ── 可改配置 5：服务器 SSH 主机指纹验证 ────────────────────────
+      # 推荐：在服务器上执行 `ssh-keyscan -p <PORT> <HOST>` 获取
+      # known_hosts 行，将结果存入 Secret SERVER_KNOWN_HOST。
+      # 若未设置该 Secret，则自动获取（仅适合内网或受信环境）。
+      - name: Prepare SSH key and known hosts
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.SERVER_SSH_KEY }}" > ~/.ssh/id_rsa
+          chmod 600 ~/.ssh/id_rsa
+          if [ -n "${{ secrets.SERVER_KNOWN_HOST }}" ]; then
+            echo "${{ secrets.SERVER_KNOWN_HOST }}" >> ~/.ssh/known_hosts
+          else
+            ssh-keyscan -p "${{ secrets.SERVER_PORT }}" "${{ secrets.SERVER_HOST }}" >> ~/.ssh/known_hosts
+          fi
+          chmod 600 ~/.ssh/known_hosts
+
+      - name: Ensure deploy directory exists on server
+        run: |
+          ssh -p "${{ secrets.SERVER_PORT }}" \
+            "${{ secrets.SERVER_USER }}@${{ secrets.SERVER_HOST }}" \
+            "mkdir -p '${{ secrets.APP_DIR }}'"
+
+      # ── 可改配置 4：服务器上 jar 的文件名 ─────────────────────────
+      # 当前上传为 app.jar；若修改，需同步更新 systemd ExecStart 路径
+      - name: Upload jar to server
+        run: |
+          scp -P "${{ secrets.SERVER_PORT }}" \
+            "${{ steps.find_jar.outputs.jar_file }}" \
+            "${{ secrets.SERVER_USER }}@${{ secrets.SERVER_HOST }}:${{ secrets.APP_DIR }}/app.jar"
+
+      - name: Restart app service and show status
+        run: |
+          ssh -p "${{ secrets.SERVER_PORT }}" \
+            "${{ secrets.SERVER_USER }}@${{ secrets.SERVER_HOST }}" \
+            "sudo systemctl restart '${{ secrets.SYSTEMD_SERVICE_NAME }}' && \
+             sudo systemctl status '${{ secrets.SYSTEMD_SERVICE_NAME }}' --no-pager"
