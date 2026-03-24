@@ -1,11 +1,8 @@
 name: Deploy Spring Boot App via SSH
 
-# ── 可改配置 1：触发分支 ─────────────────────────────────────────
-# 如需改成其他分支（如 release、prod），修改下面的 - master
+# ── 可改配置 1：触发 ─────────────────────────────────────────
 on:
-  push:
-    branches:
-      - master
+  workflow_dispatch:
 
 concurrency:
   group: production-deploy
