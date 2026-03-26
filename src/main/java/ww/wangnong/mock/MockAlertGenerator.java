@@ -25,7 +25,7 @@ public class MockAlertGenerator {
     private static final Random RNG = new Random();
     private static final ObjectMapper MAPPER = new ObjectMapper();
 
-    private static final String[] NODE_IDS = {"A03_Node_01", "A03_Node_02"};
+    private static final String[] NODE_IDS = { "A03_Node_01", "A03_Node_02" };
     private static final Map<String, String> NODE_NAMES = Map.of(
             "A03_Node_01", "温室节点 1",
             "A03_Node_02", "温室节点 2");
@@ -35,7 +35,7 @@ public class MockAlertGenerator {
     private final PahoMqttService mqttService;
 
     public MockAlertGenerator(MockAlertService alertService, AlertRepository alertRepo,
-                              PahoMqttService mqttService) {
+            PahoMqttService mqttService) {
         this.alertService = alertService;
         this.alertRepo = alertRepo;
         this.mqttService = mqttService;
@@ -43,9 +43,10 @@ public class MockAlertGenerator {
 
     @Scheduled(fixedDelay = 15_000, initialDelay = 5_000)
     public void generate() {
-        // 未处理告警 >= 5 则停止生成
+        // 未处理告警 >= 10 则停止生成
         long unhandled = alertRepo.findTop10ByIsHandledOrderByCreatedAtDesc(false).size();
-        if (unhandled >= 5) return;
+        if (unhandled >= 10)
+            return;
 
         String nodeId = NODE_IDS[RNG.nextInt(NODE_IDS.length)];
         String nodeName = NODE_NAMES.getOrDefault(nodeId, nodeId);
@@ -56,31 +57,46 @@ public class MockAlertGenerator {
         String type, typeName, level, source, sourceName, message;
         switch (tplIdx) {
             case 0 -> {
-                type = "temp_high"; typeName = "高温异常"; level = "critical";
-                source = "environment"; sourceName = "环境监测";
+                type = "temp_high";
+                typeName = "高温异常";
+                level = "critical";
+                source = "environment";
+                sourceName = "环境监测";
                 message = String.format("节点%s气温升至%.1f°C，建议立即通风降温。",
                         nodeName, 33.0 + RNG.nextDouble() * 5.5);
             }
             case 1 -> {
-                type = "humidity_low"; typeName = "空气湿度过低"; level = "warning";
-                source = "environment"; sourceName = "环境监测";
+                type = "humidity_low";
+                typeName = "空气湿度过低";
+                level = "warning";
+                source = "environment";
+                sourceName = "环境监测";
                 message = String.format("节点%s空气湿度降至%.1f%%，建议及时补水。",
                         nodeName, 35.0 + RNG.nextDouble() * 10.0);
             }
             case 2 -> {
-                type = "soil_moisture_low"; typeName = "土壤湿度偏低"; level = "warning";
-                source = "environment"; sourceName = "环境监测";
+                type = "soil_moisture_low";
+                typeName = "土壤湿度偏低";
+                level = "warning";
+                source = "environment";
+                sourceName = "环境监测";
                 message = String.format("节点%s土壤湿度仅%.1f%%，需检查灌溉系统。",
                         nodeName, 18.0 + RNG.nextDouble() * 10.0);
             }
             case 3 -> {
-                type = "pest_warning"; typeName = "病害预警"; level = "warning";
-                source = "video"; sourceName = "视频AI";
+                type = "pest_warning";
+                typeName = "病害预警";
+                level = "warning";
+                source = "video";
+                sourceName = "视频AI";
                 message = String.format("节点%s画面疑似识别到叶片病斑，请尽快复核。", nodeName);
             }
             default -> {
-                type = "intrusion_warning"; typeName = "异常闯入预警"; level = "critical";
-                source = "video"; sourceName = "视频AI";
+                type = "intrusion_warning";
+                typeName = "异常闯入预警";
+                level = "critical";
+                source = "video";
+                sourceName = "视频AI";
                 message = String.format("节点%s监控区域检测到异常闯入，请及时确认现场情况。", nodeName);
             }
         }

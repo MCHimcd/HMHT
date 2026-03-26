@@ -12,4 +12,6 @@ public interface NodeRepository extends JpaRepository<Node, Long> {
     Optional<Node> findByNodeId(String nodeId);
 
     List<Node> findByUserId(Long userId);
+
+    List<Node> findAllByNodeIdIn(List<String> nodeIds);
 }

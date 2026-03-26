@@ -73,36 +73,36 @@ try {
     $wtTabs = [System.Collections.Generic.List[string]]::new()
     $tabDelay = 0
 
-    if ($Mode -eq "bridge") {
-        # 0. InfluxDB (optional)
-        $influxExe = Join-Path $InfluxDir "influxdb3.exe"
-        if (Test-Path $influxExe) {
-            Write-Banner '[0] InfluxDB 3 (optional)'
-            $influxData = Join-Path $InfluxDir "data"
-            $pInflux = Start-Process -FilePath $influxExe `
-                -ArgumentList "serve", "--node-id", "local", "--object-store", "file", "--data-dir", $influxData `
-                -WorkingDirectory $InfluxDir -PassThru
-            $jobs += $pInflux
-            Write-Host "    PID: $($pInflux.Id)" -ForegroundColor DarkGray
-            Start-Sleep -Seconds 3
+    # 0. InfluxDB (optional)
+    $influxExe = Join-Path $InfluxDir "influxdb3.exe"
+    if (Test-Path $influxExe) {
+        Write-Banner '[0] InfluxDB 3 (optional)'
+        $influxData = Join-Path $InfluxDir "data"
+        $pInflux = Start-Process -FilePath $influxExe `
+            -ArgumentList "serve", "--node-id", "local", "--object-store", "file", "--data-dir", $influxData `
+            -WorkingDirectory $InfluxDir -PassThru
+        $jobs += $pInflux
+        Write-Host "    PID: $($pInflux.Id)" -ForegroundColor DarkGray
+        Start-Sleep -Seconds 3
 
-            if (-not $InfluxToken) {
-                Write-Host '    Creating admin token...' -ForegroundColor DarkGray
-                $tokenOut = & $influxExe create token --admin --host http://127.0.0.1:8181 --format json 2>&1
-                try {
-                    $tokenJson = $tokenOut | ConvertFrom-Json
-                    $InfluxToken = $tokenJson.raw_token
-                    if (-not $InfluxToken) { $InfluxToken = $tokenJson.token }
-                    Write-Host '    Token acquired.' -ForegroundColor Green
-                } catch {
-                    Write-Host "    Token creation returned: $tokenOut" -ForegroundColor Yellow
-                    Write-Host '    InfluxDB may already have a token. Pass -InfluxToken if so.' -ForegroundColor Yellow
-                }
+        if (-not $InfluxToken) {
+            Write-Host '    Creating admin token...' -ForegroundColor DarkGray
+            $tokenOut = & $influxExe create token --admin --host http://127.0.0.1:8181 --format json 2>&1
+            try {
+                $tokenJson = $tokenOut | ConvertFrom-Json
+                $InfluxToken = $tokenJson.raw_token
+                if (-not $InfluxToken) { $InfluxToken = $tokenJson.token }
+                Write-Host '    Token acquired.' -ForegroundColor Green
+            } catch {
+                Write-Host "    Token creation returned: $tokenOut" -ForegroundColor Yellow
+                Write-Host '    InfluxDB may already have a token. Pass -InfluxToken if so.' -ForegroundColor Yellow
             }
-        } else {
-            Write-Host "[0] InfluxDB not found at $InfluxDir (skipped)" -ForegroundColor DarkGray
         }
+    } else {
+        Write-Host "[0] InfluxDB not found at $InfluxDir (skipped)" -ForegroundColor DarkGray
+    }
 
+    if ($Mode -eq "bridge") {
         if ($wtAvailable) {
             # --- Windows Terminal 多标签页模式 ---
             Write-Banner '[1-3/4] Python 服务 -> WT 标签页'

@@ -16,15 +16,18 @@ import ww.wangnong.entity.Alert;
 import ww.wangnong.exception.BizException;
 import ww.wangnong.repository.AlertRepository;
 import ww.wangnong.service.AlertService;
+import ww.wangnong.service.OperationLogService;
 
 @Service
 public class MockAlertService implements AlertService {
 
     private static final int MAX_SIZE = 200;
     private final AlertRepository alertRepo;
+    private final OperationLogService opLog;
 
-    public MockAlertService(AlertRepository alertRepo) {
+    public MockAlertService(AlertRepository alertRepo, OperationLogService opLog) {
         this.alertRepo = alertRepo;
+        this.opLog = opLog;
     }
 
     @Override
@@ -45,9 +48,13 @@ public class MockAlertService implements AlertService {
         entity.setMessage(info.message());
         entity.setSource(info.source());
         entity.setSourceName(info.sourceName());
-        entity.setIsHandled(false);
+        entity.setIsHandled(info.isHandled());
         entity.setAlertTime(LocalDateTime.ofInstant(
                 Instant.ofEpochMilli(info.timestamp()), ZoneId.systemDefault()));
+        if (info.isHandled() && info.handleTime() != null) {
+            entity.setHandleTime(LocalDateTime.ofInstant(
+                    Instant.ofEpochMilli(info.handleTime()), ZoneId.systemDefault()));
+        }
         alertRepo.save(entity);
     }
 
@@ -102,6 +109,7 @@ public class MockAlertService implements AlertService {
         alert.setIsHandled(true);
         alert.setHandleTime(LocalDateTime.now());
         alertRepo.save(alert);
+        opLog.log("ALERT_HANDLE", null, null, "alert", alertId, action);
     }
 
     private AlertInfo toInfo(Alert a) {
@@ -119,8 +127,12 @@ public class MockAlertService implements AlertService {
     }
 
     private static int toInt(Object v, int def) {
-        if (v instanceof Number n) return n.intValue();
-        try { return Integer.parseInt(String.valueOf(v)); }
-        catch (NumberFormatException e) { return def; }
+        if (v instanceof Number n)
+            return n.intValue();
+        try {
+            return Integer.parseInt(String.valueOf(v));
+        } catch (NumberFormatException e) {
+            return def;
+        }
     }
 }

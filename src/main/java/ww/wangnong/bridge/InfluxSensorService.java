@@ -23,12 +23,13 @@ import org.springframework.stereotype.Service;
 import ww.wangnong.service.SensorService;
 
 /**
- * SensorService backed by InfluxDB — reads real telemetry history written by the bridge.
+ * SensorService backed by InfluxDB — reads real telemetry history written by
+ * the bridge.
  * Active only when bridge mode is on AND InfluxDB client is available.
  */
 @Service
 @Primary
-@ConditionalOnProperty(name = "hmht.run.mode", havingValue = "bridge")
+@ConditionalOnProperty(prefix = "hmht.influxdb", name = "enabled", havingValue = "true")
 @ConditionalOnBean(InfluxDBClient.class)
 public class InfluxSensorService implements SensorService {
 
@@ -79,7 +80,8 @@ public class InfluxSensorService implements SensorService {
             var iterator = stream.iterator();
             while (iterator.hasNext()) {
                 Object[] row = iterator.next();
-                if (row.length < 2 || row[1] == null) continue;
+                if (row.length < 2 || row[1] == null)
+                    continue;
                 Instant ts = row[0] instanceof Instant inst ? inst : Instant.parse(String.valueOf(row[0]));
                 double val = row[1] instanceof Number n ? n.doubleValue() : Double.parseDouble(String.valueOf(row[1]));
                 val = Math.round(val * 10.0) / 10.0;
@@ -133,7 +135,8 @@ public class InfluxSensorService implements SensorService {
             var iterator = stream.iterator();
             while (iterator.hasNext()) {
                 Object[] row = iterator.next();
-                if (row.length < 2 || row[1] == null) continue;
+                if (row.length < 2 || row[1] == null)
+                    continue;
                 Instant ts = row[0] instanceof Instant inst ? inst : Instant.parse(String.valueOf(row[0]));
                 double val = row[1] instanceof Number n ? n.doubleValue() : Double.parseDouble(String.valueOf(row[1]));
                 val = Math.round(val * 10.0) / 10.0;

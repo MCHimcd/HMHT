@@ -18,6 +18,7 @@ import ww.wangnong.exception.BizException;
 import ww.wangnong.repository.UserRepository;
 import ww.wangnong.repository.VerificationCodeRepository;
 import ww.wangnong.service.AuthService;
+import ww.wangnong.service.OperationLogService;
 
 @Service
 public class MockAuthService implements AuthService {
@@ -27,11 +28,14 @@ public class MockAuthService implements AuthService {
 
     private final UserRepository userRepo;
     private final VerificationCodeRepository codeRepo;
+    private final OperationLogService opLog;
     private final Map<String, Long> tokenToUserId = new ConcurrentHashMap<>();
 
-    public MockAuthService(UserRepository userRepo, VerificationCodeRepository codeRepo) {
+    public MockAuthService(UserRepository userRepo, VerificationCodeRepository codeRepo,
+            OperationLogService opLog) {
         this.userRepo = userRepo;
         this.codeRepo = codeRepo;
+        this.opLog = opLog;
     }
 
     @Override
@@ -43,6 +47,7 @@ public class MockAuthService implements AuthService {
         }
         String token = UUID.randomUUID().toString();
         tokenToUserId.put(token, user.getId());
+        opLog.log("LOGIN", user.getId(), user.getUserName(), "user", String.valueOf(user.getId()), "登录成功");
         return new LoginResult(token, 3600);
     }
 
@@ -90,12 +95,16 @@ public class MockAuthService implements AuthService {
 
     @Override
     public Profile updateProfile(String token, String userName, String gender,
-                                  String birthDate, String avatarSrc) {
+            String birthDate, String avatarSrc) {
         User user = requireUser(token);
-        if (userName != null) user.setUserName(userName);
-        if (gender != null) user.setGender(gender);
-        if (birthDate != null) user.setBirthDate(LocalDate.parse(birthDate));
-        if (avatarSrc != null) user.setAvatarSrc(avatarSrc);
+        if (userName != null)
+            user.setUserName(userName);
+        if (gender != null)
+            user.setGender(gender);
+        if (birthDate != null)
+            user.setBirthDate(LocalDate.parse(birthDate));
+        if (avatarSrc != null)
+            user.setAvatarSrc(avatarSrc);
         userRepo.save(user);
         return toProfile(user);
     }
@@ -120,7 +129,10 @@ public class MockAuthService implements AuthService {
 
     @Override
     public void logout(String token) {
-        tokenToUserId.remove(token);
+        Long userId = tokenToUserId.remove(token);
+        if (userId != null) {
+            opLog.log("LOGOUT", userId, null, "user", String.valueOf(userId), "登出");
+        }
     }
 
     private void verifyCode(String phone, String code) {
@@ -137,7 +149,8 @@ public class MockAuthService implements AuthService {
 
     public User requireUser(String token) {
         Long userId = tokenToUserId.get(token);
-        if (userId == null) throw new BizException(401, "未登录或 token 已过期");
+        if (userId == null)
+            throw new BizException(401, "未登录或 token 已过期");
         return userRepo.findById(userId)
                 .orElseThrow(() -> new BizException(401, "用户不存在"));
     }

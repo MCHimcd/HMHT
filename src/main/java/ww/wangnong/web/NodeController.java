@@ -1,7 +1,11 @@
 package ww.wangnong.web;
 
+import java.util.List;
+
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PutMapping;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
@@ -44,5 +48,14 @@ public class NodeController {
     @GetMapping("/{nodeId}/equipment-meta")
     public ApiResponse<?> getEquipmentMeta(@PathVariable String nodeId) {
         return ApiResponse.ok(nodeService.getEquipmentMeta(nodeId));
+    }
+
+    @PutMapping("/{nodeId}/sensor-thresholds")
+    public ApiResponse<?> updateThresholds(
+            @RequestHeader(value = "Authorization", defaultValue = "") String auth,
+            @PathVariable String nodeId,
+            @RequestBody List<NodeService.ThresholdUpdate> thresholds) {
+        nodeService.updateSensorThresholds(extractToken(auth), nodeId, thresholds);
+        return ApiResponse.ok();
     }
 }

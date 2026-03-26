@@ -4,7 +4,8 @@ import java.util.List;
 
 public interface AdminService {
 
-    record UserInfo(long id, String userName, String phone, String role) {}
+    record UserInfo(long id, String userName, String phone, String role) {
+    }
 
     void createNode(String token, String nodeId, String nodeName);
 
@@ -15,4 +16,8 @@ public interface AdminService {
     List<UserInfo> listUsers(String token);
 
     void updateUserRole(String token, long userId, String role);
+
+    List<String> getUserNodeIds(String token, long userId);
+
+    void setUserNodeIds(String token, long userId, List<String> nodeIds);
 }

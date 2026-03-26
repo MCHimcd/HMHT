@@ -17,24 +17,33 @@ public class MockSensorService implements SensorService {
     private static final Random RNG = new Random();
 
     private static final Map<String, double[]> BASE_VALUES = Map.of(
-            "temperature", new double[]{25.0, 3.0},
-            "humidity", new double[]{60.0, 10.0},
-            "light", new double[]{10000.0, 2000.0},
-            "co2", new double[]{400.0, 50.0},
-            "soilTemp", new double[]{20.0, 2.0},
-            "soilHumidity", new double[]{40.0, 5.0});
+            "temperature", new double[] { 25.0, 3.0 },
+            "humidity", new double[] { 60.0, 10.0 },
+            "light", new double[] { 10000.0, 2000.0 },
+            "co2", new double[] { 400.0, 50.0 },
+            "soilTemp", new double[] { 20.0, 2.0 },
+            "soilHumidity", new double[] { 40.0, 5.0 });
 
     @Override
     public SensorHistoryResult getSensorHistory(String nodeId, String metric, String range) {
-        double[] bv = BASE_VALUES.getOrDefault(metric, new double[]{25.0, 3.0});
+        double[] bv = BASE_VALUES.getOrDefault(metric, new double[] { 25.0, 3.0 });
         double base = bv[0], variance = bv[1];
 
         int numPoints;
         long intervalMs;
         switch (range) {
-            case "7d" -> { numPoints = 7 * 24; intervalMs = 3_600_000L; }
-            case "30d" -> { numPoints = 30; intervalMs = 86_400_000L; }
-            default -> { numPoints = 48; intervalMs = 1_800_000L; }
+            case "7d" -> {
+                numPoints = 42;
+                intervalMs = 4 * 3_600_000L;
+            }
+            case "30d" -> {
+                numPoints = 30;
+                intervalMs = 86_400_000L;
+            }
+            default -> {
+                numPoints = 48;
+                intervalMs = 1_800_000L;
+            }
         }
 
         long now = System.currentTimeMillis();

@@ -16,7 +16,7 @@ import org.springframework.stereotype.Component;
  * Writes translated telemetry data to InfluxDB.
  */
 @Component
-@ConditionalOnProperty(name = "hmht.run.mode", havingValue = "bridge")
+@ConditionalOnProperty(prefix = "hmht.influxdb", name = "enabled", havingValue = "true")
 public class InfluxTelemetryWriter {
 
     private static final Logger log = LoggerFactory.getLogger(InfluxTelemetryWriter.class);
@@ -43,7 +43,8 @@ public class InfluxTelemetryWriter {
             boolean hasField = false;
             for (var entry : envData.entrySet()) {
                 if (entry.getValue() instanceof Number n) {
-                    if (hasField) envLine.append(',');
+                    if (hasField)
+                        envLine.append(',');
                     envLine.append(escape(entry.getKey())).append('=').append(n.doubleValue());
                     hasField = true;
                 }

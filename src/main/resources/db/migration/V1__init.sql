@@ -1,5 +1,5 @@
 -- ============================================================
--- V1: HMHT 初始化表结构 (device→node 重构版)
+-- V1: HMHT 初始化表结构
 -- ============================================================
 
 -- 1. 用户表
@@ -25,20 +25,20 @@ CREATE TABLE users
     UPDATE CURRENT_TIMESTAMP
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
-    -- 2. 节点注册表 (原 devices)
+    -- 2. 节点注册表
     CREATE TABLE nodes
     (
         id BIGINT
         AUTO_INCREMENT PRIMARY KEY,
-    node_id   VARCHAR
+    node_id    VARCHAR
         (50)  NOT NULL UNIQUE,
-    node_name VARCHAR
+    node_name  VARCHAR
         (100),
-    user_id   BIGINT       NOT NULL,
-    online    BOOLEAN      NOT NULL DEFAULT FALSE,
-    smart_mode BOOLEAN     NOT NULL DEFAULT FALSE,
-    created_at DATETIME    NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    updated_at DATETIME    NOT NULL DEFAULT CURRENT_TIMESTAMP ON
+    user_id    BIGINT       NOT NULL,
+    online     BOOLEAN      NOT NULL DEFAULT FALSE,
+    smart_mode BOOLEAN      NOT NULL DEFAULT FALSE,
+    created_at DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP ON
         UPDATE CURRENT_TIMESTAMP,
     CONSTRAINT fk_node_user
         FOREIGN KEY
@@ -191,3 +191,69 @@ CREATE TABLE users
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
                                         CREATE INDEX idx_vcode_phone ON verification_codes(phone, expires_at);
+
+                                        -- 11. 定时任务
+                                        CREATE TABLE scheduled_tasks
+                                        (
+                                            id BIGINT
+                                            AUTO_INCREMENT PRIMARY KEY,
+    node_id       VARCHAR
+                                            (50)  NOT NULL,
+    user_id       BIGINT       NOT NULL,
+    equipment_key VARCHAR
+                                            (50)  NOT NULL,
+    action        VARCHAR
+                                            (20)  NOT NULL,
+    task_name     VARCHAR
+                                            (100),
+    hour          INT          NOT NULL,
+    minute        INT          NOT NULL,
+    repeat_days   VARCHAR
+                                            (20),
+    enabled       BOOLEAN      NOT NULL DEFAULT TRUE,
+    created_at    DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at    DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP ON
+                                            UPDATE CURRENT_TIMESTAMP
+                                            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+                                            CREATE INDEX idx_task_user ON scheduled_tasks(user_id);
+                                            CREATE INDEX idx_task_enabled ON scheduled_tasks(enabled);
+
+                                            -- 12. 操作日志
+                                            CREATE TABLE operation_logs
+                                            (
+                                                id BIGINT
+                                                AUTO_INCREMENT PRIMARY KEY,
+    user_id        BIGINT,
+    user_name      VARCHAR
+                                                (100),
+    operation_type VARCHAR
+                                                (50)  NOT NULL,
+    target_type    VARCHAR
+                                                (50),
+    target_id      VARCHAR
+                                                (100),
+    detail         TEXT,
+    ip_address     VARCHAR
+                                                (50),
+    created_at     DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+                                                CREATE INDEX idx_oplog_type ON operation_logs(operation_type, created_at);
+                                                CREATE INDEX idx_oplog_user ON operation_logs(user_id, created_at);
+
+                                                -- 13. 用户-节点访问授权
+                                                CREATE TABLE user_node_access
+                                                (
+                                                    id BIGINT
+                                                    AUTO_INCREMENT PRIMARY KEY,
+    user_id    BIGINT      NOT NULL,
+    node_id    VARCHAR
+                                                    (50) NOT NULL,
+    created_at DATETIME    NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE KEY uk_user_node
+                                                    (user_id, node_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+                                                    CREATE INDEX idx_una_user ON user_node_access(user_id);
+                                                    CREATE INDEX idx_una_node ON user_node_access(node_id);

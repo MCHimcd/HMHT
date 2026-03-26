@@ -1,5 +1,6 @@
 package ww.wangnong.web;
 
+import java.util.List;
 import java.util.Map;
 
 import org.springframework.web.bind.annotation.DeleteMapping;
@@ -25,7 +26,8 @@ public class AdminController {
         this.adminService = adminService;
     }
 
-    record CreateNodeRequest(String nodeId, String nodeName) {}
+    record CreateNodeRequest(String nodeId, String nodeName) {
+    }
 
     @PostMapping("/nodes")
     public ApiResponse<?> createNode(
@@ -35,7 +37,8 @@ public class AdminController {
         return ApiResponse.ok();
     }
 
-    record UpdateNodeRequest(String nodeName) {}
+    record UpdateNodeRequest(String nodeName) {
+    }
 
     @PutMapping("/nodes/{nodeId}")
     public ApiResponse<?> updateNode(
@@ -66,6 +69,25 @@ public class AdminController {
             @PathVariable long userId,
             @RequestBody Map<String, String> body) {
         adminService.updateUserRole(extractToken(auth), userId, body.get("role"));
+        return ApiResponse.ok();
+    }
+
+    @GetMapping("/users/{userId}/nodes")
+    public ApiResponse<?> getUserNodes(
+            @RequestHeader(value = "Authorization", defaultValue = "") String auth,
+            @PathVariable long userId) {
+        return ApiResponse.ok(adminService.getUserNodeIds(extractToken(auth), userId));
+    }
+
+    record SetUserNodesRequest(List<String> nodeIds) {
+    }
+
+    @PutMapping("/users/{userId}/nodes")
+    public ApiResponse<?> setUserNodes(
+            @RequestHeader(value = "Authorization", defaultValue = "") String auth,
+            @PathVariable long userId,
+            @RequestBody SetUserNodesRequest req) {
+        adminService.setUserNodeIds(extractToken(auth), userId, req.nodeIds());
         return ApiResponse.ok();
     }
 
