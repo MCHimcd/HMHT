@@ -1,6 +1,6 @@
-# HMHT — 万农智慧系统（后端）
+# HMHT — 鸿蒙慧田智慧系统（后端）
 
-> Spring Boot 后端服务，为万农智慧农业 App（HarmonyOS）提供 REST API、MQTT 桥接和数据持久化。
+> Spring Boot 后端服务，为鸿蒙慧田智慧农业 App（OpenHarmony）提供 REST API、MQTT 桥接和数据持久化。
 
 ## 技术栈
 
