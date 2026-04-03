@@ -41,7 +41,7 @@ HMHT/
 ├── src/test/java/ww/wangnong/         # 测试
 ├── docker-compose.yml                 # 容器编排（全链路）
 ├── Dockerfile                         # Spring Boot JAR 镜像
-├── start-all.ps1                      # 一键启动脚本（本地开发）
+├── start.ps1                          # 一键启动脚本（本地开发）
 ├── docs/deployment.md                 # 云部署指南
 └── .github/workflows/deploy.yml       # GitHub Actions 部署工作流
 ```
@@ -76,10 +76,12 @@ HMHT 支持两种运行模式，通过 `hmht.run.mode` 属性（环境变量 `HM
 ### 本地开发（全链路）
 
 ```powershell
-.\start-all.ps1 -Mode bridge
+.\start.ps1 -Mode bridge
 ```
 
-支持参数：`-Mode mock|bridge`、`-PythonDir`、`-JavaDir`、`-AgriChatPort`、`-InfluxDir`、`-InfluxToken`。自动检测 Windows Terminal 多标签。
+支持参数：`-Mode mock|bridge`、`-PythonDir`、`-JavaDir`、`-AgriChatPort`、`-InfluxDir`、`-InfluxToken`。要求已安装 Windows Terminal（`wt.exe`）。
+
+`start.ps1` 启动后会在主终端实时展示各服务状态（Starting/Running/Stopping/Stopped/Failed），并在 Ctrl+C 时执行统一停机：先优雅停止，超时后强制回收，确保标签页与子进程同步退出。
 
 ### Docker Compose（全链路）
 
@@ -102,6 +104,12 @@ docker compose up -d
 ```
 
 测试报告：`build/reports/tests/test/index.html`
+
+脚本级校验（启动脚本重构约束）：
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\tests\start.ps1.test.ps1
+```
 
 #### 测试层次结构
 
@@ -207,6 +215,12 @@ docker compose up -d
 |------|------|------|------|
 | GET | `/v1/admin/logs` | 查询操作日志（?page=&size=&type=） | 否 |
 
+### 健康检查 — HealthController (`/v1`)
+
+| 方法 | 路径 | 说明 | 认证 |
+|------|------|------|------|
+| GET | `/v1/health` | 前端可用性检查（统一 ApiResponse） | 否 |
+
 ### 基础设施 — InfraController (`/infra`)
 
 | 方法 | 路径 | 说明 | 认证 |
@@ -277,6 +291,7 @@ Service 接口定义在 `ww.wangnong.service`，根据运行模式由不同实�
 | `ExtraController` | `/v1/traceability`, `/v1/cameras` | 溯源扫码、摄像头直播/回放/关键帧 |
 | `AdminController` | `/v1/admin` | 节点管理、用户管理、权限分配 |
 | `OperationLogController` | `/v1/admin/logs` | 操作日志查询 |
+| `HealthController` | `/v1` | 前端可用性健康检查 |
 | `InfraController` | `/infra` | 健康检查、MQTT 手动发布 |
 
 ## MQTT 协议

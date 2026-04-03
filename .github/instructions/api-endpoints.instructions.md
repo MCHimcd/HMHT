@@ -77,4 +77,5 @@ throw new BizException(404, "节点不存在");
 - **溯源/摄像头**：`ExtraController` → `/v1/traceability/scan` (POST), `/v1/cameras/{nodeId}/live|playback|keyframes` (GET)
 - **管理**：`AdminController` → `/v1/admin/nodes` CRUD, `/v1/admin/users` 列表 + 角色 + 节点权限
 - **操作日志**：`OperationLogController` → `/v1/admin/logs` (GET ?page=&size=&type=)
+- **健康检查**：`HealthController` → `/v1/health` (GET)
 - **基础设施**：`InfraController` → `/infra/health` (GET), `/infra/mqtt/publish` (POST)

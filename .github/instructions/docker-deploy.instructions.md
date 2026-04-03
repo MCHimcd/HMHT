@@ -1,6 +1,6 @@
 ---
-description: "Use when modifying Docker Compose services, Dockerfile, GitHub Actions deployment workflow, environment variable configuration, or the start-all.ps1 local development launcher."
-applyTo: "docker-compose.yml,Dockerfile,.github/workflows/**,start-all.ps1"
+description: "Use when modifying Docker Compose services, Dockerfile, GitHub Actions deployment workflow, environment variable configuration, or the start.ps1 local development launcher."
+applyTo: "docker-compose.yml,Dockerfile,.github/workflows/**,start.ps1"
 ---
 
 # Docker & 部署约定
@@ -33,6 +33,16 @@ applyTo: "docker-compose.yml,Dockerfile,.github/workflows/**,start-all.ps1"
 - MySQL 在宿主机运行（`host.docker.internal`），不在 Compose 中
 - Python 服务依赖 MQTT Broker（公网 `broker.emqx.io`）
 - `agri-backend` 需要 `AGENT_INTERVAL_MINUTES` 控制 SunAgent 决策周期
+
+## 验证要求（脚本/部署类改动）
+
+当改动仅限于以下范围时：`*.ps1`、`README.md`、`.github/instructions/**`、`docker-compose.yml`、`Dockerfile`、`.github/workflows/**`，且未涉及 Java 源码或 Gradle 构建文件：
+
+- 无需执行 `./gradlew clean bootJar`
+- 无需执行 `./gradlew test`
+- 需执行与改动相关的验证（如 PowerShell 脚本冒烟、参数校验、文档引用一致性检查）
+
+若改动包含 Java 源码、测试源码、Gradle 配置或会影响 Java 运行行为，则恢复执行完整 gradlew 构建与测试。
 - 修改服务端口或环境变量后需同步检查其他服务的引用
 
 ## Dockerfile
@@ -79,16 +89,16 @@ ENTRYPOINT ["java", "-jar", "/app/app.jar"]
 - 修改 JDK 版本需同步更新 `build.gradle` 的 `java.toolchain.languageVersion`
 - 详细部署指南参见 `docs/deployment.md`
 
-## start-all.ps1（本地开发启动脚本）
+## start.ps1（本地开发启动脚本）
 
 ### 使用方式
 
 ```powershell
 # Mock 模式（仅 Java）
-.\start-all.ps1 -Mode mock
+.\start.ps1 -Mode mock
 
 # Bridge 模式（全链路）
-.\start-all.ps1 -Mode bridge
+.\start.ps1 -Mode bridge
 ```
 
 ### 参数
@@ -104,11 +114,11 @@ ENTRYPOINT ["java", "-jar", "/app/app.jar"]
 
 ### 行为
 
-- 自动检测 Windows Terminal → 多标签启动
-- 无 Windows Terminal → 独立 cmd 窗口
+- 强依赖 Windows Terminal（wt.exe）→ 单窗口多标签启动
+- 主终端实时显示标签页状态
 - bridge 模式启动：InfluxDB(可选) → mock_device.py → backend_main_debug.py → web_server_debug.py → gradlew bootRun
 - mock 模式仅启动 Java
-- Ctrl+C 关闭所有子进程
+- Ctrl+C 统一停机（优雅优先，超时强制）并同步关闭标签页/子进程
 
 ### 修改注意事项
 

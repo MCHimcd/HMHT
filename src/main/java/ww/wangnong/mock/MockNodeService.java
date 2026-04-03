@@ -1,6 +1,7 @@
 package ww.wangnong.mock;
 
 import java.util.List;
+import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.stream.Stream;
 
@@ -63,8 +64,10 @@ public class MockNodeService implements NodeService {
             List<String> accessNodeIds = userNodeAccessRepo.findByUserId(user.getId())
                     .stream().map(UserNodeAccess::getNodeId).toList();
             List<Node> accessed = accessNodeIds.isEmpty() ? List.of() : nodeRepo.findAllByNodeIdIn(accessNodeIds);
-            nodes = Stream.concat(owned.stream(), accessed.stream())
-                    .distinct().toList();
+            Map<String, Node> deduplicated = new LinkedHashMap<>();
+            Stream.concat(owned.stream(), accessed.stream())
+                    .forEach(node -> deduplicated.putIfAbsent(node.getNodeId(), node));
+            nodes = List.copyOf(deduplicated.values());
         }
         return nodes.stream()
                 .map(n -> new NodeInfo(n.getNodeId(), n.getNodeName(),

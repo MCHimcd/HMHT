@@ -74,6 +74,16 @@
 
 **每次修改完成后，必须依次通过以下两项验证，缺一不可：**
 
+### 非 Java 变更例外
+
+若本次改动 **仅涉及非 Java 内容**（例如：`*.ps1`、`README.md`、`.github/instructions/**`、`docker-compose.yml`、`Dockerfile`、`.github/workflows/**`），且未修改 `src/main/java/**`、`src/test/java/**`、`build.gradle`、`settings.gradle` 等 Java 构建/测试相关文件，则：
+
+- 可跳过 `./gradlew clean bootJar`
+- 可跳过 `./gradlew test`
+- 仍需执行与本次改动直接相关的验证（如脚本自检、命令冒烟、文档一致性检查）
+
+若无法确定是否属于非 Java 变更，默认按“需要 gradlew 构建与测试”处理。
+
 ### 1. 编译验证
 
 ```bash

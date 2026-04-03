@@ -118,6 +118,28 @@ class MockNodeServiceTest {
         assertThat(result).hasSize(2);
     }
 
+    @Test
+    void listNodes_normalUser_overlapOwnedAndAuthorized_deduplicatesByNodeId() {
+        User user = stubUser(2L, "user");
+        when(authService.requireUser("token")).thenReturn(user);
+
+        Node owned = stubNode("N01", "我的", user);
+        when(nodeRepo.findByUserId(2L)).thenReturn(List.of(owned));
+
+        UserNodeAccess access = new UserNodeAccess();
+        access.setNodeId("N01");
+        when(userNodeAccessRepo.findByUserId(2L)).thenReturn(List.of(access));
+
+        User other = stubUser(1L, "admin");
+        Node accessedDuplicate = stubNode("N01", "授权重复", other);
+        when(nodeRepo.findAllByNodeIdIn(List.of("N01"))).thenReturn(List.of(accessedDuplicate));
+
+        List<NodeInfo> result = service.listNodes("token");
+
+        assertThat(result).hasSize(1);
+        assertThat(result.getFirst().id()).isEqualTo("N01");
+    }
+
     // ── getNode ──
 
     @Test
