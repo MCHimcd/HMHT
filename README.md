@@ -55,6 +55,12 @@ HMHT 支持两种运行模式，通过 `hmht.run.mode` 属性（环境变量 `HM
 | **mock**（默认） | 仅 Java 服务，启动时自动播种演示数据 | MockDataLifecycle 内存种子 + InfluxDB 30 天历史 |
 | **bridge** | Java + Python 全链路，MQTT 双向桥接 | Python agri 后端 → MQTT → MqttBridge → App |
 
+> 当前阶段（连接框架一期）仅完成硬件端基础连接框架：
+> 1) MQTT 连接生命周期管理；
+> 2) 订阅注册占位机制。
+>
+> 具体硬件接口协议与数据格式将在后续迭代按硬件设计确定。
+
 ### 环境变量
 
 | 变量 | 默认值 | 说明 |
@@ -116,12 +122,12 @@ powershell -ExecutionPolicy Bypass -File .\scripts\tests\start.ps1.test.ps1
 | 层次 | 注解 | 文件数 | 说明 |
 |------|------|--------|------|
 | DTO / 异常 | `@Test` (纯 JUnit) | 3 | ApiResponse、BizException、GlobalExceptionHandler |
-| 桥接工具 | `@ExtendWith(MockitoExtension)` | 1 | TelemetryTranslator 键名翻译 |
+| 桥接与连接框架 | `@ExtendWith(MockitoExtension)` | 4 | TelemetryTranslator、MqttBridge、PahoMqttService、MqttSubscriptionRegistry |
 | Repository | `@DataJpaTest` (H2) | 7 | 13 个 Repository 的自定义查询方法 |
 | Service (Mock 实现) | `@ExtendWith(MockitoExtension)` | 9 | 8 个 Mock 实现 + OperationLogService |
 | Controller | `@WebMvcTest` | 10 | 10 个 Controller 端点验证 |
 
-共 **31 个测试类**，覆盖 DTO → Repository → Service → Controller 全链路。
+共 **34 个测试类**，覆盖 DTO → 连接框架 → Repository → Service → Controller 全链路。
 
 #### 测试约定
 
@@ -276,7 +282,8 @@ Service 接口定义在 `ww.wangnong.service`，根据运行模式由不同实�
 | `TelemetryTranslator` | `bridge/` | Python → App 遥测字段映射 |
 | `InfluxTelemetryWriter` | `bridge/` | 翻译后遥测写入 InfluxDB |
 | `InfluxTelemetryService` | `influx/` | InfluxDB 低级写入（Line Protocol） |
-| `PahoMqttService` | `mqtt/` | Eclipse Paho MQTT 客户端封装 |
+| `PahoMqttService` | `mqtt/` | Eclipse Paho MQTT 客户端封装（连接生命周期快照、重连重订阅） |
+| `MqttSubscriptionRegistry` | `mqtt/` | MQTT 订阅注册占位机制，统一管理 bridge 主题处理器 |
 
 ## Controller 清单
 
@@ -309,11 +316,21 @@ Service 接口定义在 `ww.wangnong.service`，根据运行模式由不同实�
 
 ### 桥接逻辑（MqttBridge）
 
-1. 订阅 Python 端 `/agri/device/+/telemetry` 和 `/agri/ai_vision/alert`
+1. 通过 `MqttSubscriptionRegistry` 注册并绑定 4 个桥接主题：
+	- `/agri/device/+/telemetry`
+	- `/agri/ai_vision/alert`
+	- `/wangnong_2026/node/+/command`
+	- `/agri/device/+/ack`
 2. 通过 `TelemetryTranslator` 翻译字段名（如 `air_temp` → `temperature`）
 3. 发布到 App 端主题 `/wangnong_2026/node/{nodeId}/telemetry`
 4. AI 视觉告警解析置信度映射告警级别（≥0.85 critical，≥0.6 warning，其他 info）
 5. 同时写入 InfluxDB（通过 `InfluxTelemetryWriter`）
+
+### 连接框架一期边界（协议待定）
+
+- 本期只建设“连接框架能力”：连接生命周期管理 + 订阅注册扩展点。
+- 本期不变更现有业务 topic 与 payload 契约，确保与 App/Python 现有链路兼容。
+- 后续如接入新硬件协议，将在当前注册机制上增量扩展，不影响现有桥接行为。
 
 ### 遥测字段映射（TelemetryTranslator）
 

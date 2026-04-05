@@ -13,6 +13,7 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
 
 import jakarta.annotation.PostConstruct;
+import ww.wangnong.mqtt.MqttSubscriptionRegistry;
 import ww.wangnong.mqtt.PahoMqttService;
 import ww.wangnong.service.AlertService;
 import ww.wangnong.service.AlertService.AlertInfo;
@@ -44,21 +45,27 @@ public class MqttBridge {
     // Topic prefixes
     private static final String APP_TOPIC_PREFIX = "/wangnong_2026/node/";
     private static final String PY_TOPIC_PREFIX = "/agri/device/";
+    private static final int BRIDGE_QOS = 1;
 
     private final PahoMqttService mqtt;
     private final AlertService alertService;
     private final InfluxTelemetryWriter influxWriter;
+    private final MqttSubscriptionRegistry subscriptionRegistry;
 
-    public MqttBridge(PahoMqttService mqtt, AlertService alertService, InfluxTelemetryWriter influxWriter) {
+    public MqttBridge(PahoMqttService mqtt,
+            AlertService alertService,
+            InfluxTelemetryWriter influxWriter,
+            MqttSubscriptionRegistry subscriptionRegistry) {
         this.mqtt = mqtt;
         this.alertService = alertService;
         this.influxWriter = influxWriter;
+        this.subscriptionRegistry = subscriptionRegistry;
     }
 
     @PostConstruct
     public void init() {
         // 1) Python telemetry → translate → App telemetry + InfluxDB
-        mqtt.subscribe(PY_TELEMETRY, msg -> {
+        subscriptionRegistry.register(PY_TELEMETRY, BRIDGE_QOS, msg -> {
             try {
                 Map<String, Object> pyPayload = MAPPER.readValue(msg.payload(), MAP_TYPE);
                 Map<String, Object> appPayload = TelemetryTranslator.pyToApp(pyPayload);
@@ -78,7 +85,7 @@ public class MqttBridge {
         });
 
         // 2) Python AI vision alert → translate to AlertInfo → store + publish to App
-        mqtt.subscribe(PY_AI_ALERT, msg -> {
+        subscriptionRegistry.register(PY_AI_ALERT, BRIDGE_QOS, msg -> {
             try {
                 Map<String, Object> pyAlert = MAPPER.readValue(msg.payload(), MAP_TYPE);
                 bridgeAiAlert(pyAlert);
@@ -88,7 +95,7 @@ public class MqttBridge {
         });
 
         // 3) App command → forward to Python topic
-        mqtt.subscribe(APP_COMMAND, msg -> {
+        subscriptionRegistry.register(APP_COMMAND, BRIDGE_QOS, msg -> {
             try {
                 // Extract nodeId from topic: /wangnong_2026/node/{nodeId}/command
                 String topic = msg.topic();
@@ -106,9 +113,11 @@ public class MqttBridge {
         });
 
         // 4) Python command ACK → log only
-        mqtt.subscribe(PY_ACK, msg -> {
+        subscriptionRegistry.register(PY_ACK, BRIDGE_QOS, msg -> {
             log.info("[Bridge] Command ACK received: topic={}, payload={}", msg.topic(), msg.payload());
         });
+
+        subscriptionRegistry.bindAll(mqtt);
 
         log.info("[Bridge] MQTT Bridge initialized — bridging /agri/ ↔ /wangnong_2026/");
     }

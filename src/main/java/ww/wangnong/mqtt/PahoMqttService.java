@@ -1,7 +1,9 @@
 package ww.wangnong.mqtt;
 
+import java.time.Instant;
 import java.nio.charset.StandardCharsets;
 import java.util.Map;
+import java.util.Objects;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Consumer;
 
@@ -15,6 +17,7 @@ import org.eclipse.paho.client.mqttv3.MqttTopic;
 import org.eclipse.paho.client.mqttv3.persist.MemoryPersistence;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 import jakarta.annotation.PostConstruct;
@@ -26,30 +29,46 @@ public class PahoMqttService {
     private static final Logger log = LoggerFactory.getLogger(PahoMqttService.class);
 
     private final MqttProperties properties;
+    private final MqttClientFactory clientFactory;
 
     private final Map<String, SubscriptionBinding> subscriptions = new ConcurrentHashMap<>();
 
     private MqttAsyncClient client;
+    private volatile ConnectionState state = ConnectionState.DISCONNECTED;
+    private volatile String activeClientId;
+    private volatile Instant lastConnectedAt;
+    private volatile String lastError;
 
+    @Autowired
     public PahoMqttService(MqttProperties properties) {
-        this.properties = properties;
+        this(properties, (serverUri, clientId) -> new MqttAsyncClient(serverUri, clientId, new MemoryPersistence()));
+    }
+
+    PahoMqttService(MqttProperties properties, MqttClientFactory clientFactory) {
+        this.properties = Objects.requireNonNull(properties, "properties cannot be null");
+        this.clientFactory = Objects.requireNonNull(clientFactory, "clientFactory cannot be null");
     }
 
     @PostConstruct
     public void connect() {
         if (!properties.isEnabled()) {
+            state = ConnectionState.DISABLED;
+            lastError = null;
             log.info("MQTT is disabled by configuration.");
             return;
         }
 
+        state = ConnectionState.CONNECTING;
+        lastError = null;
         try {
             String configuredClientId = properties.getClientId();
             String clientId = (configuredClientId == null || configuredClientId.isBlank())
                     ? MqttAsyncClient.generateClientId()
                     : configuredClientId;
+            this.activeClientId = clientId;
 
-            this.client = new MqttAsyncClient(properties.getServerUri(), clientId, new MemoryPersistence());
-                this.client.setCallback(buildCallback());
+            this.client = clientFactory.create(properties.getServerUri(), clientId);
+            this.client.setCallback(buildCallback());
 
             MqttConnectOptions options = new MqttConnectOptions();
             options.setAutomaticReconnect(true);
@@ -65,15 +84,30 @@ public class PahoMqttService {
             }
 
             client.connect(options).waitForCompletion();
+            markConnected();
             log.info("MQTT connected: uri={}, clientId={}", properties.getServerUri(), clientId);
             resubscribeAll();
         } catch (MqttException e) {
+            state = ConnectionState.FAILED;
+            lastError = describeError(e);
             log.error("MQTT connection failed. HTTP server remains available.", e);
         }
     }
 
     public boolean isConnected() {
-        return client != null && client.isConnected();
+        return state == ConnectionState.CONNECTED && client != null && client.isConnected();
+    }
+
+    public LifecycleSnapshot lifecycleSnapshot() {
+        String connectedAt = lastConnectedAt == null ? null : lastConnectedAt.toString();
+        return new LifecycleSnapshot(
+                state,
+                isConnected(),
+                properties.getServerUri(),
+                activeClientId,
+                connectedAt,
+                lastError,
+                subscriptions.size());
     }
 
     public void publish(String topic, String payload, Integer qos, boolean retained) {
@@ -147,6 +181,7 @@ public class PahoMqttService {
     @PreDestroy
     public void disconnect() {
         if (client == null) {
+            state = properties.isEnabled() ? ConnectionState.DISCONNECTED : ConnectionState.DISABLED;
             return;
         }
 
@@ -155,8 +190,10 @@ public class PahoMqttService {
                 client.disconnect().waitForCompletion();
             }
             client.close();
+            state = ConnectionState.DISCONNECTED;
             log.info("MQTT disconnected.");
         } catch (MqttException e) {
+            lastError = describeError(e);
             log.warn("Error while disconnecting MQTT client.", e);
         }
     }
@@ -165,12 +202,15 @@ public class PahoMqttService {
         return new MqttCallbackExtended() {
             @Override
             public void connectComplete(boolean reconnect, String serverURI) {
+                markConnected();
                 log.info("MQTT connectComplete: reconnect={}, uri={}", reconnect, serverURI);
                 resubscribeAll();
             }
 
             @Override
             public void connectionLost(Throwable cause) {
+                state = ConnectionState.DISCONNECTED;
+                lastError = describeError(cause);
                 log.warn("MQTT connection lost.", cause);
             }
 
@@ -241,7 +281,47 @@ public class PahoMqttService {
         return qos;
     }
 
+    private void markConnected() {
+        state = ConnectionState.CONNECTED;
+        lastConnectedAt = Instant.now();
+        lastError = null;
+    }
+
+    private static String describeError(Throwable throwable) {
+        if (throwable == null) {
+            return null;
+        }
+        String message = throwable.getMessage();
+        if (message == null || message.isBlank()) {
+            return throwable.getClass().getSimpleName();
+        }
+        return throwable.getClass().getSimpleName() + ": " + message;
+    }
+
     public record InboundMessage(String topic, String payload, int qos, boolean retained) {
+    }
+
+    public enum ConnectionState {
+        DISABLED,
+        DISCONNECTED,
+        CONNECTING,
+        CONNECTED,
+        FAILED
+    }
+
+    public record LifecycleSnapshot(
+            ConnectionState state,
+            boolean connected,
+            String serverUri,
+            String clientId,
+            String lastConnectedAt,
+            String lastError,
+            int cachedSubscriptionCount) {
+    }
+
+    @FunctionalInterface
+    interface MqttClientFactory {
+        MqttAsyncClient create(String serverUri, String clientId) throws MqttException;
     }
 
     private record SubscriptionBinding(int qos, Consumer<InboundMessage> handler) {
