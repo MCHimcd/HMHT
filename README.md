@@ -47,12 +47,14 @@ HMHT/
 
 ## 运行模式
 
-HMHT 支持两种运行模式，通过 `hmht.run.mode` 属性（环境变量 `HMHT_RUN_MODE`）切换：
+HMHT 支持四种运行模式，通过 `hmht.run.mode` 属性（环境变量 `HMHT_RUN_MODE`）切换：
 
 | 模式 | 说明 | 数据来源 |
 |------|------|----------|
 | **mock**（默认） | 仅 Java 服务，启动时自动播种演示数据 | MockDataLifecycle 内存种子 + InfluxDB 30 天历史 |
-| **bridge** | Java + Python 全链路，MQTT 双向桥接 | Python agri 后端 → MQTT → MqttBridge → App |
+| **bridge** | App <-> Java <-> Python（不走硬件） | Python agri 后端 → MQTT → MqttBridge → App |
+| **hardware** | App <-> Java <-> 硬件端（不走 Python） | 硬件设备 MQTT → MqttBridge → App |
+| **full** | App <-> Java <-> Python <-> 硬件端（完整链路） | Python + 硬件双源 MQTT → MqttBridge → App |
 
 > 当前 V2 阶段能力：
 > 1) App <-> 后端 <-> 硬件链路打通（telemetry/command/ack）；
@@ -66,7 +68,7 @@ HMHT 支持两种运行模式，通过 `hmht.run.mode` 属性（环境变量 `HM
 
 | 变量 | 默认值 | 说明 |
 |------|--------|------|
-| `HMHT_RUN_MODE` | `mock` | 运行模式：`mock` / `bridge` |
+| `HMHT_RUN_MODE` | `mock` | 运行模式：`mock` / `bridge` / `hardware` / `full` |
 | `HMHT_MOCK_SEED_ENABLED` | `true` | mock 模式是否播种演示数据 |
 | `HMHT_AGRI_CHAT_URL` | `http://localhost:5000` | Python agri chat 服务地址 |
 | `HMHT_INFLUXDB_ENABLED` | `true` | 是否启用 InfluxDB |
@@ -86,10 +88,10 @@ HMHT 支持两种运行模式，通过 `hmht.run.mode` 属性（环境变量 `HM
 ### 本地开发（全链路）
 
 ```powershell
-.\start.ps1
+.\start.ps1 -Mode full
 ```
 
-支持参数：`-Mode mock|bridge`、`-PythonDir`、`-JavaDir`、`-AgriChatPort`、`-InfluxDir`、`-InfluxToken`。要求已安装 Windows Terminal（`wt.exe`）。
+支持参数：`-Mode mock|bridge|hardware|full`、`-PythonDir`、`-JavaDir`、`-AgriChatPort`、`-InfluxDir`、`-InfluxToken`。要求已安装 Windows Terminal（`wt.exe`）。
 
 `start.ps1` 启动后会在主终端实时展示各服务状态（Starting/Running/Stopping/Stopped/Failed），并在 Ctrl+C 时执行统一停机：先优雅停止，超时后强制回收，确保标签页与子进程同步退出。
 
@@ -451,5 +453,5 @@ Service 接口定义在 `ww.wangnong.service`，根据运行模式由不同实�
 ### 配置管理
 
 - `@ConfigurationProperties` 用于结构化配置（`MqttProperties`、`InfluxDbProperties`）
-- `@ConditionalOnProperty` 用于 mock/bridge 模式切换
+- `@ConditionalOnProperty` / `@ConditionalOnExpression` 用于运行模式切换
 - 敏感配置通过环境变量注入（数据库密码、InfluxDB Token）

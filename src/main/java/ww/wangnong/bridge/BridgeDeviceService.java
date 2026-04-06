@@ -1,6 +1,6 @@
 package ww.wangnong.bridge;
 
-import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnExpression;
 import org.springframework.context.annotation.Primary;
 import org.springframework.stereotype.Service;
 
@@ -12,7 +12,7 @@ import ww.wangnong.service.DatabaseDeviceService;
 
 @Service
 @Primary
-@ConditionalOnProperty(name = "hmht.run.mode", havingValue = "bridge")
+@ConditionalOnExpression("'${hmht.run.mode:mock}'.equals('bridge') || '${hmht.run.mode:mock}'.equals('hardware') || '${hmht.run.mode:mock}'.equals('full')")
 public class BridgeDeviceService extends DatabaseDeviceService {
 
     public BridgeDeviceService(

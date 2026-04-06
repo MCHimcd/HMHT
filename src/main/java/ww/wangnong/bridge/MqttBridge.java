@@ -9,7 +9,8 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnExpression;
 import org.springframework.stereotype.Component;
 
 import jakarta.annotation.PostConstruct;
@@ -24,10 +25,10 @@ import ww.wangnong.service.AlertService.AlertInfo;
  * Subscribes to Python-side topics (/agri/...) and republishes translated
  * messages on App-side topics (/wangnong_2026/...), and vice versa for commands.
  *
- * Activated by hmht.mqtt.bridge.enabled=true.
+ * Activated when hmht.run.mode is bridge/hardware/full.
  */
 @Component
-@ConditionalOnProperty(name = "hmht.run.mode", havingValue = "bridge")
+@ConditionalOnExpression("'${hmht.run.mode:mock}'.equals('bridge') || '${hmht.run.mode:mock}'.equals('hardware') || '${hmht.run.mode:mock}'.equals('full')")
 public class MqttBridge {
 
     private static final Logger log = LoggerFactory.getLogger(MqttBridge.class);
@@ -58,145 +59,226 @@ public class MqttBridge {
     private final InfluxTelemetryWriter influxWriter;
     private final MqttSubscriptionRegistry subscriptionRegistry;
     private final ProtocolPersistenceService protocolPersistenceService;
+    private final String runMode;
 
     public MqttBridge(PahoMqttService mqtt,
             AlertService alertService,
             InfluxTelemetryWriter influxWriter,
             MqttSubscriptionRegistry subscriptionRegistry,
-            ProtocolPersistenceService protocolPersistenceService) {
+            ProtocolPersistenceService protocolPersistenceService,
+            @Value("${hmht.run.mode:mock}") String runMode) {
         this.mqtt = mqtt;
         this.alertService = alertService;
         this.influxWriter = influxWriter;
         this.subscriptionRegistry = subscriptionRegistry;
         this.protocolPersistenceService = protocolPersistenceService;
+        this.runMode = runMode;
     }
 
     @PostConstruct
     public void init() {
-        // 1) Python telemetry → translate → App telemetry + InfluxDB
-        subscriptionRegistry.register(PY_TELEMETRY, BRIDGE_QOS, msg -> {
-            try {
-                Map<String, Object> pyPayload = MAPPER.readValue(msg.payload(), MAP_TYPE);
-                Map<String, Object> appPayload = TelemetryTranslator.pyToApp(pyPayload);
-                forwardTelemetry(msg.topic(), appPayload);
+        final boolean enablePythonRoute = isPythonRouteEnabled();
+        final boolean enableHardwareRoute = isHardwareRouteEnabled();
 
-                protocolPersistenceService.recordIngestAudit(
-                        "telemetry",
-                        msg.topic(),
-                        str(pyPayload.get("device_id")),
-                        str(pyPayload.get("protocol_version")),
-                        str(pyPayload.get("trace_id")),
-                        "forwarded",
-                        null);
-            } catch (Exception e) {
-                log.warn("[Bridge] Failed to bridge telemetry: {}", msg.topic(), e);
-                protocolPersistenceService.recordDeadletter(
-                        msg.topic(),
-                        "",
-                        "telemetry",
-                        e.getMessage(),
-                        msg.payload(),
-                        "");
-            }
-        });
+        if (enablePythonRoute) {
+            // 1) Python telemetry → translate → App telemetry + InfluxDB
+            subscriptionRegistry.register(PY_TELEMETRY, BRIDGE_QOS, msg -> {
+                try {
+                    Map<String, Object> pyPayload = MAPPER.readValue(msg.payload(), MAP_TYPE);
+                    Map<String, Object> appPayload = TelemetryTranslator.pyToApp(pyPayload);
+                    forwardTelemetry(msg.topic(), appPayload);
 
-        // 1.1) Hardware V2 telemetry → normalize → App telemetry + InfluxDB
-        subscriptionRegistry.register(HW_TELEMETRY, BRIDGE_QOS, msg -> {
-            try {
-                Map<String, Object> hwPayload = MAPPER.readValue(msg.payload(), MAP_TYPE);
-                String topicDeviceId = extractDeviceId(msg.topic(), HW_TOPIC_PREFIX);
-                if ((hwPayload.get("device_id") == null || String.valueOf(hwPayload.get("device_id")).isBlank())
-                        && !topicDeviceId.isBlank()) {
-                    hwPayload.put("device_id", topicDeviceId);
+                    protocolPersistenceService.recordIngestAudit(
+                            "telemetry",
+                            msg.topic(),
+                            str(pyPayload.get("device_id")),
+                            str(pyPayload.get("protocol_version")),
+                            str(pyPayload.get("trace_id")),
+                            "forwarded",
+                            null);
+                } catch (Exception e) {
+                    log.warn("[Bridge] Failed to bridge telemetry: {}", msg.topic(), e);
+                    protocolPersistenceService.recordDeadletter(
+                            msg.topic(),
+                            "",
+                            "telemetry",
+                            e.getMessage(),
+                            msg.payload(),
+                            "");
                 }
+            });
 
-                Map<String, Object> appPayload = TelemetryTranslator.hardwareV2ToApp(hwPayload);
-                forwardTelemetry(msg.topic(), appPayload);
+            // 2) Python AI vision alert → translate to AlertInfo → store + publish to App
+            subscriptionRegistry.register(PY_AI_ALERT, BRIDGE_QOS, msg -> {
+                try {
+                    Map<String, Object> pyAlert = MAPPER.readValue(msg.payload(), MAP_TYPE);
+                    bridgeAiAlert(pyAlert);
+                } catch (Exception e) {
+                    log.warn("[Bridge] Failed to bridge AI alert", e);
+                }
+            });
 
+            // 4) Python command ACK → log only
+            subscriptionRegistry.register(PY_ACK, BRIDGE_QOS, msg -> {
+                log.info("[Bridge] Command ACK received: topic={}, payload={}", msg.topic(), msg.payload());
                 protocolPersistenceService.recordIngestAudit(
-                        "telemetry",
+                        "ack",
                         msg.topic(),
-                        str(hwPayload.get("device_id")),
-                        str(hwPayload.get("protocol_version")),
-                        str(hwPayload.get("trace_id")),
-                        "forwarded",
-                        null);
-            } catch (Exception e) {
-                log.warn("[Bridge] Failed to bridge hardware telemetry: {}", msg.topic(), e);
-                protocolPersistenceService.recordDeadletter(
-                        msg.topic(),
+                        extractDeviceId(msg.topic(), PY_TOPIC_PREFIX),
+                        "1.0",
                         "",
-                        "telemetry",
-                        e.getMessage(),
-                        msg.payload(),
-                        "");
-            }
-        });
+                        "received",
+                        null);
+            });
+        }
+
+        if (enableHardwareRoute) {
+            // 1.1) Hardware V2 telemetry → normalize → App telemetry + InfluxDB
+            subscriptionRegistry.register(HW_TELEMETRY, BRIDGE_QOS, msg -> {
+                try {
+                    Map<String, Object> hwPayload = MAPPER.readValue(msg.payload(), MAP_TYPE);
+                    String topicDeviceId = extractDeviceId(msg.topic(), HW_TOPIC_PREFIX);
+                    if ((hwPayload.get("device_id") == null || String.valueOf(hwPayload.get("device_id")).isBlank())
+                            && !topicDeviceId.isBlank()) {
+                        hwPayload.put("device_id", topicDeviceId);
+                    }
+
+                    Map<String, Object> appPayload = TelemetryTranslator.hardwareV2ToApp(hwPayload);
+                    forwardTelemetry(msg.topic(), appPayload);
+
+                    protocolPersistenceService.recordIngestAudit(
+                            "telemetry",
+                            msg.topic(),
+                            str(hwPayload.get("device_id")),
+                            str(hwPayload.get("protocol_version")),
+                            str(hwPayload.get("trace_id")),
+                            "forwarded",
+                            null);
+                } catch (Exception e) {
+                    log.warn("[Bridge] Failed to bridge hardware telemetry: {}", msg.topic(), e);
+                    protocolPersistenceService.recordDeadletter(
+                            msg.topic(),
+                            "",
+                            "telemetry",
+                            e.getMessage(),
+                            msg.payload(),
+                            "");
+                }
+            });
 
             // 1.2) Hardware capability declaration → control-plane persistence
             subscriptionRegistry.register(HW_CAPABILITY, BRIDGE_QOS, msg -> {
                 try {
-                Map<String, Object> capabilityPayload = MAPPER.readValue(msg.payload(), MAP_TYPE);
-                String topicDeviceId = extractDeviceId(msg.topic(), HW_TOPIC_PREFIX);
-                if ((capabilityPayload.get("device_id") == null
-                    || String.valueOf(capabilityPayload.get("device_id")).isBlank())
-                    && !topicDeviceId.isBlank()) {
-                    capabilityPayload.put("device_id", topicDeviceId);
-                }
+                    Map<String, Object> capabilityPayload = MAPPER.readValue(msg.payload(), MAP_TYPE);
+                    String topicDeviceId = extractDeviceId(msg.topic(), HW_TOPIC_PREFIX);
+                    if ((capabilityPayload.get("device_id") == null
+                            || String.valueOf(capabilityPayload.get("device_id")).isBlank())
+                            && !topicDeviceId.isBlank()) {
+                        capabilityPayload.put("device_id", topicDeviceId);
+                    }
 
-                @SuppressWarnings("unchecked")
-                Map<String, Object> payload = extractPayloadMap(capabilityPayload);
-                Map<String, Object> sensors = payload.get("sensors") instanceof Map<?, ?> map
-                    ? (Map<String, Object>) map
-                    : Map.of();
-                Map<String, Object> equipments = payload.get("equipments") instanceof Map<?, ?> map
-                    ? (Map<String, Object>) map
-                    : Map.of();
+                    @SuppressWarnings("unchecked")
+                    Map<String, Object> payload = extractPayloadMap(capabilityPayload);
+                    Map<String, Object> sensors = payload.get("sensors") instanceof Map<?, ?> map
+                            ? (Map<String, Object>) map
+                            : Map.of();
+                    Map<String, Object> equipments = payload.get("equipments") instanceof Map<?, ?> map
+                            ? (Map<String, Object>) map
+                            : Map.of();
 
-                String deviceId = firstNonBlank(str(capabilityPayload.get("device_id")), topicDeviceId);
-                String capabilityVersion = firstNonBlank(
-                    str(payload.get("capability_version")),
-                    str(capabilityPayload.get("protocol_version")),
-                    "2.0");
-                String checksum = firstNonBlank(str(payload.get("checksum")), str(capabilityPayload.get("checksum")));
-                Long timestamp = toLong(capabilityPayload.get("timestamp"));
-                String traceId = firstNonBlank(
-                    str(capabilityPayload.get("trace_id")),
-                    str(payload.get("trace_id")));
+                    String deviceId = firstNonBlank(str(capabilityPayload.get("device_id")), topicDeviceId);
+                    String capabilityVersion = firstNonBlank(
+                            str(payload.get("capability_version")),
+                            str(capabilityPayload.get("protocol_version")),
+                            "2.0");
+                    String checksum = firstNonBlank(str(payload.get("checksum")), str(capabilityPayload.get("checksum")));
+                    Long timestamp = toLong(capabilityPayload.get("timestamp"));
+                    String traceId = firstNonBlank(
+                            str(capabilityPayload.get("trace_id")),
+                            str(payload.get("trace_id")));
 
-                protocolPersistenceService.recordCapabilitySnapshot(
-                    deviceId,
-                    capabilityVersion,
-                    checksum,
-                    sensors,
-                    equipments,
-                    timestamp,
-                    msg.topic(),
-                    msg.payload(),
-                    traceId);
+                    protocolPersistenceService.recordCapabilitySnapshot(
+                            deviceId,
+                            capabilityVersion,
+                            checksum,
+                            sensors,
+                            equipments,
+                            timestamp,
+                            msg.topic(),
+                            msg.payload(),
+                            traceId);
                 } catch (Exception e) {
-                log.warn("[Bridge] Failed to persist capability snapshot: {}", msg.topic(), e);
-                protocolPersistenceService.recordDeadletter(
-                    msg.topic(),
-                    extractDeviceId(msg.topic(), HW_TOPIC_PREFIX),
-                    "capability",
-                    e.getMessage(),
-                    msg.payload(),
-                    "");
+                    log.warn("[Bridge] Failed to persist capability snapshot: {}", msg.topic(), e);
+                    protocolPersistenceService.recordDeadletter(
+                            msg.topic(),
+                            extractDeviceId(msg.topic(), HW_TOPIC_PREFIX),
+                            "capability",
+                            e.getMessage(),
+                            msg.payload(),
+                            "");
                 }
             });
 
-        // 2) Python AI vision alert → translate to AlertInfo → store + publish to App
-        subscriptionRegistry.register(PY_AI_ALERT, BRIDGE_QOS, msg -> {
-            try {
-                Map<String, Object> pyAlert = MAPPER.readValue(msg.payload(), MAP_TYPE);
-                bridgeAiAlert(pyAlert);
-            } catch (Exception e) {
-                log.warn("[Bridge] Failed to bridge AI alert", e);
-            }
-        });
+            // 4.1) Hardware ACK → relay to App ACK topic + log
+            subscriptionRegistry.register(HW_ACK, BRIDGE_QOS, msg -> {
+                try {
+                    Map<String, Object> ackPayload = MAPPER.readValue(msg.payload(), MAP_TYPE);
+                    @SuppressWarnings("unchecked")
+                    Map<String, Object> ackData = extractPayloadMap(ackPayload);
+                    String nodeId = firstNonBlank(
+                            str(ackPayload.get("device_id")),
+                            extractDeviceId(msg.topic(), HW_TOPIC_PREFIX));
 
-        // 3) App command → forward to Python topic
+                    if (nodeId.isBlank()) {
+                        log.warn("[Bridge] Hardware ACK missing device_id: topic={}", msg.topic());
+                        return;
+                    }
+
+                    String appAckTopic = APP_TOPIC_PREFIX + nodeId + "/ack";
+                    mqtt.publish(appAckTopic, msg.payload(), 1, false);
+
+                    String commandId = str(ackData.get("command_id"));
+                    String status = str(ackData.get("status"));
+                    Integer ackCode = toInt(ackData.get("ack_code"));
+                    String ackMessage = str(ackData.get("ack_message"));
+                    Long ackedAt = toLong(ackData.get("acked_at"));
+                    String traceId = firstNonBlank(str(ackPayload.get("trace_id")), str(ackData.get("trace_id")));
+
+                    protocolPersistenceService.recordAckReceived(
+                            nodeId,
+                            commandId,
+                            status,
+                            ackCode,
+                            ackMessage,
+                            ackedAt,
+                            msg.payload(),
+                            msg.topic(),
+                            traceId);
+
+                    protocolPersistenceService.recordIngestAudit(
+                            "ack",
+                            msg.topic(),
+                            nodeId,
+                            str(ackPayload.get("protocol_version")),
+                            traceId,
+                            "relayed",
+                            null);
+
+                    log.info("[Bridge] Hardware ACK relayed: {} → {}", msg.topic(), appAckTopic);
+                } catch (Exception e) {
+                    log.warn("[Bridge] Failed to relay hardware ACK: {}", msg.topic(), e);
+                    protocolPersistenceService.recordDeadletter(
+                            msg.topic(),
+                            extractDeviceId(msg.topic(), HW_TOPIC_PREFIX),
+                            "ack",
+                            e.getMessage(),
+                            msg.payload(),
+                            "");
+                }
+            });
+        }
+
+        // 3) App command → forward based on run mode route
         subscriptionRegistry.register(APP_COMMAND, BRIDGE_QOS, msg -> {
             try {
                 // Extract nodeId from topic: /wangnong_2026/node/{nodeId}/command
@@ -207,33 +289,50 @@ public class MqttBridge {
                 String deviceId = parts[3];
 
                 String pyTopic = PY_TOPIC_PREFIX + deviceId + "/command";
-                mqtt.publish(pyTopic, msg.payload(), 1, false);
-
                 String hwTopic = HW_TOPIC_PREFIX + deviceId + "/command";
-                HardwareCommandEnvelope hwEnvelope = toHardwareCommandEnvelope(deviceId, msg.payload());
-                mqtt.publish(hwTopic, hwEnvelope.rawJson(), 1, false);
 
-                protocolPersistenceService.recordCommandDispatched(
-                        deviceId,
-                        hwEnvelope.commandId(),
-                        hwEnvelope.targetKey(),
-                        hwEnvelope.action(),
-                        hwEnvelope.traceId(),
-                        hwEnvelope.timeoutMs(),
-                        topic,
-                        hwTopic,
-                        hwEnvelope.rawJson());
+                HardwareCommandEnvelope hwEnvelope = null;
+                String protocolVersion = "1.0";
+                String traceId = "";
+
+                if (enablePythonRoute) {
+                    mqtt.publish(pyTopic, msg.payload(), 1, false);
+                }
+                if (enableHardwareRoute) {
+                    hwEnvelope = toHardwareCommandEnvelope(deviceId, msg.payload());
+                    mqtt.publish(hwTopic, hwEnvelope.rawJson(), 1, false);
+
+                    protocolPersistenceService.recordCommandDispatched(
+                            deviceId,
+                            hwEnvelope.commandId(),
+                            hwEnvelope.targetKey(),
+                            hwEnvelope.action(),
+                            hwEnvelope.traceId(),
+                            hwEnvelope.timeoutMs(),
+                            topic,
+                            hwTopic,
+                            hwEnvelope.rawJson());
+
+                    protocolVersion = hwEnvelope.protocolVersion();
+                    traceId = hwEnvelope.traceId();
+                }
 
                 protocolPersistenceService.recordIngestAudit(
                         "command",
                         topic,
                         deviceId,
-                        hwEnvelope.protocolVersion(),
-                        hwEnvelope.traceId(),
+                        protocolVersion,
+                        traceId,
                         "forwarded",
                         null);
 
-                log.debug("[Bridge] Command forwarded: {} → {} and {}", topic, pyTopic, hwTopic);
+                if (enablePythonRoute && enableHardwareRoute) {
+                    log.debug("[Bridge] Command forwarded: {} → {} and {}", topic, pyTopic, hwTopic);
+                } else if (enablePythonRoute) {
+                    log.debug("[Bridge] Command forwarded: {} → {}", topic, pyTopic);
+                } else {
+                    log.debug("[Bridge] Command forwarded: {} → {}", topic, hwTopic);
+                }
             } catch (Exception e) {
                 log.warn("[Bridge] Failed to bridge command: {}", msg.topic(), e);
                 protocolPersistenceService.recordDeadletter(
@@ -246,80 +345,20 @@ public class MqttBridge {
             }
         });
 
-        // 4) Python command ACK → log only
-        subscriptionRegistry.register(PY_ACK, BRIDGE_QOS, msg -> {
-            log.info("[Bridge] Command ACK received: topic={}, payload={}", msg.topic(), msg.payload());
-            protocolPersistenceService.recordIngestAudit(
-                    "ack",
-                    msg.topic(),
-                    extractDeviceId(msg.topic(), PY_TOPIC_PREFIX),
-                    "1.0",
-                    "",
-                    "received",
-                    null);
-        });
-
-        // 4.1) Hardware ACK → relay to App ACK topic + log
-        subscriptionRegistry.register(HW_ACK, BRIDGE_QOS, msg -> {
-            try {
-                Map<String, Object> ackPayload = MAPPER.readValue(msg.payload(), MAP_TYPE);
-                @SuppressWarnings("unchecked")
-                Map<String, Object> ackData = extractPayloadMap(ackPayload);
-                String nodeId = firstNonBlank(
-                        str(ackPayload.get("device_id")),
-                        extractDeviceId(msg.topic(), HW_TOPIC_PREFIX));
-
-                if (nodeId.isBlank()) {
-                    log.warn("[Bridge] Hardware ACK missing device_id: topic={}", msg.topic());
-                    return;
-                }
-
-                String appAckTopic = APP_TOPIC_PREFIX + nodeId + "/ack";
-                mqtt.publish(appAckTopic, msg.payload(), 1, false);
-
-                String commandId = str(ackData.get("command_id"));
-                String status = str(ackData.get("status"));
-                Integer ackCode = toInt(ackData.get("ack_code"));
-                String ackMessage = str(ackData.get("ack_message"));
-                Long ackedAt = toLong(ackData.get("acked_at"));
-                String traceId = firstNonBlank(str(ackPayload.get("trace_id")), str(ackData.get("trace_id")));
-
-                protocolPersistenceService.recordAckReceived(
-                    nodeId,
-                    commandId,
-                    status,
-                    ackCode,
-                    ackMessage,
-                    ackedAt,
-                    msg.payload(),
-                    msg.topic(),
-                    traceId);
-
-                protocolPersistenceService.recordIngestAudit(
-                    "ack",
-                    msg.topic(),
-                    nodeId,
-                    str(ackPayload.get("protocol_version")),
-                    traceId,
-                    "relayed",
-                    null);
-
-                log.info("[Bridge] Hardware ACK relayed: {} → {}", msg.topic(), appAckTopic);
-            } catch (Exception e) {
-                log.warn("[Bridge] Failed to relay hardware ACK: {}", msg.topic(), e);
-                protocolPersistenceService.recordDeadletter(
-                        msg.topic(),
-                        extractDeviceId(msg.topic(), HW_TOPIC_PREFIX),
-                        "ack",
-                        e.getMessage(),
-                        msg.payload(),
-                        "");
-            }
-        });
-
         subscriptionRegistry.bindAll(mqtt);
 
-        log.info("[Bridge] MQTT Bridge initialized — bridging /agri/ + /hmht/ ↔ /wangnong_2026/");
+        log.info("[Bridge] MQTT Bridge initialized: mode={}, pythonRoute={}, hardwareRoute={}",
+                runMode,
+                enablePythonRoute,
+                enableHardwareRoute);
+    }
+
+    private boolean isPythonRouteEnabled() {
+        return "bridge".equals(runMode) || "full".equals(runMode);
+    }
+
+    private boolean isHardwareRouteEnabled() {
+        return "hardware".equals(runMode) || "full".equals(runMode);
     }
 
     private void forwardTelemetry(String sourceTopic, Map<String, Object> appPayload) throws Exception {

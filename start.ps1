@@ -1,6 +1,6 @@
 ﻿<#
 .SYNOPSIS
-    一键启动 万农智慧系统 (App <-> Java <-> Python) 全链路。
+    一键启动 万农智慧系统多模式链路。
 
 .DESCRIPTION
     主控模式（默认）会在单个 Windows Terminal 窗口内创建多标签页，
@@ -14,8 +14,10 @@
 
 .PARAMETER Mode
     运行模式:
-      mock   - Java 使用模拟数据 (默认, 不需要 Python)
-      bridge - Java 桥接 Python, 启动全链路
+    mock     - App <-> Java (模拟数据)
+    bridge   - App <-> Java <-> Python
+    hardware - App <-> Java <-> 硬件端
+    full     - App <-> Java <-> Python <-> 硬件端
 
 .PARAMETER PythonDir
     Python agri 后端目录。
@@ -36,7 +38,7 @@
     .\start.ps1 -Mode bridge
 #>
 param(
-    [ValidateSet("mock", "bridge")]
+    [ValidateSet("mock", "bridge", "hardware", "full")]
     [string]$Mode = "mock",
     [string]$PythonDir = "d:\DevEcoStudioProjects\agri\agri_system\backend",
     [string]$JavaDir = "d:\JetBrainsProjects\HMHT",
@@ -481,7 +483,7 @@ else {
     Write-Host "[0] InfluxDB not found at $InfluxDir (skipped)" -ForegroundColor DarkGray
 }
 
-if ($Mode -eq "bridge") {
+if ($Mode -in @("bridge", "full")) {
     $pythonScripts = @(
         [pscustomobject]@{ Name = "Mock Device"; Entry = "mock_device.py" },
         [pscustomobject]@{ Name = "Backend"; Entry = "backend_main_debug.py" },

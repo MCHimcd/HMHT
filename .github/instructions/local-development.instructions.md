@@ -12,7 +12,7 @@ applyTo: "start.ps1,scripts/tests/start.ps1.test.ps1,README.md,src/main/resource
 ## 运行入口
 
 - Java 单服务（mock）：`./gradlew bootRun`
-- 脚本入口（支持 mock/bridge）：`./start.ps1 -Mode mock|bridge`
+- 脚本入口（支持 mock/bridge/hardware/full）：`./start.ps1 -Mode mock|bridge|hardware|full`
 - 启动脚本依赖 Windows Terminal（`wt.exe`）
 
 ## 运行模式约定
@@ -20,11 +20,14 @@ applyTo: "start.ps1,scripts/tests/start.ps1.test.ps1,README.md,src/main/resource
 | 模式 | 说明 | 典型场景 |
 |------|------|----------|
 | `mock` | 仅 Java 服务，使用 mock 数据 | 接口联调、前端本地开发 |
-| `bridge` | Java + Python 桥接链路 | MQTT 桥接联调、端到端验证 |
+| `bridge` | App <-> Java <-> Python（不走硬件） | Python 对接联调、AI 对话联调 |
+| `hardware` | App <-> Java <-> 硬件（不走 Python） | 纯硬件链路联调 |
+| `full` | App <-> Java <-> Python <-> 硬件 | 全链路端到端验证 |
 
 修改 `hmht.run.mode` 或 `HMHT_RUN_MODE` 时，需同步检查：
 
 - Service 条件装配（`@ConditionalOnProperty`）是否符合预期
+- 多值模式条件（如 `@ConditionalOnExpression`）是否与模式语义一致
 - README 中「运行模式」「构建与运行」章节是否同步
 - 相关测试（尤其是模式切换行为）是否仍成立
 

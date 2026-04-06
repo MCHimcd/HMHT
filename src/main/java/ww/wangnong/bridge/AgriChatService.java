@@ -12,7 +12,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnExpression;
 import org.springframework.context.annotation.Primary;
 import org.springframework.core.io.ByteArrayResource;
 import org.springframework.http.MediaType;
@@ -29,7 +29,7 @@ import ww.wangnong.service.ChatService;
  */
 @Service
 @Primary
-@ConditionalOnProperty(name = "hmht.run.mode", havingValue = "bridge")
+@ConditionalOnExpression("'${hmht.run.mode:mock}'.equals('bridge') || '${hmht.run.mode:mock}'.equals('full')")
 public class AgriChatService implements ChatService {
 
     private static final Logger log = LoggerFactory.getLogger(AgriChatService.class);

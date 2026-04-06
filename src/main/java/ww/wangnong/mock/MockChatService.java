@@ -1,12 +1,12 @@
 package ww.wangnong.mock;
 
-import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnExpression;
 import org.springframework.stereotype.Service;
 
 import ww.wangnong.service.ChatService;
 
 @Service
-@ConditionalOnProperty(name = "hmht.run.mode", havingValue = "mock", matchIfMissing = true)
+@ConditionalOnExpression("'${hmht.run.mode:mock}'.equals('mock') || '${hmht.run.mode:mock}'.equals('hardware')")
 public class MockChatService implements ChatService {
 
     @Override

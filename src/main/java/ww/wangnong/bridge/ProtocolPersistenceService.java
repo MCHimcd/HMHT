@@ -12,7 +12,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnExpression;
 import org.springframework.stereotype.Service;
 
 import ww.wangnong.entity.CommandAck;
@@ -35,7 +35,7 @@ import ww.wangnong.repository.IngestAuditRepository;
 import ww.wangnong.repository.IngestDeadletterRepository;
 
 @Service
-@ConditionalOnProperty(name = "hmht.run.mode", havingValue = "bridge")
+@ConditionalOnExpression("'${hmht.run.mode:mock}'.equals('bridge') || '${hmht.run.mode:mock}'.equals('hardware') || '${hmht.run.mode:mock}'.equals('full')")
 public class ProtocolPersistenceService {
 
     private static final Logger log = LoggerFactory.getLogger(ProtocolPersistenceService.class);

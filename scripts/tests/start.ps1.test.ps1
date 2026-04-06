@@ -20,7 +20,7 @@ Assert-True (-not (Test-Path $legacyScript)) 'start-all.ps1 should be renamed to
 
 $content = Get-Content -Path $startScript -Raw -Encoding UTF8
 
-Assert-True ($content -match '\[ValidateSet\("mock",\s*"bridge"\)\]') 'Mode must keep mock/bridge validate set.'
+Assert-True ($content -match '\[ValidateSet\("mock",\s*"bridge",\s*"hardware",\s*"full"\)\]') 'Mode must keep mock/bridge/hardware/full validate set.'
 Assert-True ($content -match '\[switch\]\$WorkerMode') 'start.ps1 must support WorkerMode for tab workers.'
 Assert-True ($content -match 'Get-Command\s+"wt"') 'start.ps1 must require Windows Terminal.'
 Assert-True ($content -match 'UTF8') 'start.ps1 must set UTF-8 related behavior.'
