@@ -19,6 +19,7 @@ applyTo: "src/test/**/*.java"
 | Controller | `@WebMvcTest(XxxController.class)` | MockMvc + `@MockBean` 服务层 |
 | Service | `@ExtendWith(MockitoExtension.class)` | `@Mock` Repository + `@InjectMocks` MockXxxService |
 | Repository | `@DataJpaTest` | H2 内存数据库自动创建 schema |
+| Scheduler/Bridge Loop | `@ExtendWith(MockitoExtension.class)` | 直接调用定时方法，验证重试与状态迁移 |
 | 工具类 | 纯 JUnit 5 | 无 Spring 上下文（如 TelemetryTranslator） |
 | DTO / Exception | 纯 JUnit 5 | ApiResponse record、BizException、GlobalExceptionHandler |
 
@@ -55,7 +56,7 @@ class XxxControllerTest {
     @Autowired
     private MockMvc mockMvc;
 
-    @MockBean
+    @MockitoBean
     private XxxService xxxService;
 
     @Test
@@ -74,12 +75,19 @@ class XxxControllerTest {
 ```
 
 重要事项：
-- 不需要 `@MockBean PahoMqttService`（SecurityConfig 不依赖它）
-- InfraController 需要 `@MockBean PahoMqttService`（构造器注入）
+- Spring Boot 4.x 推荐使用 `@MockitoBean`（非 `@MockBean`）
+- 不需要 `@MockitoBean PahoMqttService`（SecurityConfig 不依赖它）
+- InfraController 需要 `@MockitoBean PahoMqttService`（构造器注入）
 - `BizException` 由 `GlobalExceptionHandler` 拦截并返回 `ApiResponse.error()`
 - 使用 `@Import(GlobalExceptionHandler.class)` 确保异常处理器生效（如需要）
 - 请求体使用 JSON 字符串，`contentType(MediaType.APPLICATION_JSON)`
 - Authorization header 格式：`"Bearer {token}"`，Controller 内部 extractToken 去掉前缀
+
+V2 新增测试建议：
+
+- 设备接口：覆盖 `/v1/devices/{deviceId}/capability` 与 `/shadow`。
+- 重试闭环：覆盖超时、重试、最大次数终态、ACK 终止重试。
+- 动态时序：覆盖 `telemetry_metric` 查询与 legacy 回退。
 
 ## Service 测试 (@ExtendWith MockitoExtension)
 
@@ -152,6 +160,11 @@ class XxxRepositoryTest {
 - `spring.flyway.enabled=false`
 - `hmht.mqtt.enabled=false`
 - `hmht.influxdb.enabled=false`
+
+补充建议：
+
+- 新增 Service 若依赖非业务核心 Bean（如 JSON 工具），优先避免让 `@SpringBootTest` 因上下文缺 Bean 失败。
+- 若必须依赖该 Bean，请在测试配置中显式提供或在构造器中注入可替代实现。
 
 ## 常见 BizException 状态码
 

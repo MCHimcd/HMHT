@@ -42,6 +42,7 @@ public class MqttBridge {
     // Hardware-side topic patterns
     private static final String HW_TELEMETRY = "/hmht/device/+/telemetry";
     private static final String HW_ACK = "/hmht/device/+/ack";
+    private static final String HW_CAPABILITY = "/hmht/device/+/capability";
 
     // App-side topic patterns
     private static final String APP_COMMAND = "/wangnong_2026/node/+/command";
@@ -131,6 +132,59 @@ public class MqttBridge {
                         "");
             }
         });
+
+            // 1.2) Hardware capability declaration → control-plane persistence
+            subscriptionRegistry.register(HW_CAPABILITY, BRIDGE_QOS, msg -> {
+                try {
+                Map<String, Object> capabilityPayload = MAPPER.readValue(msg.payload(), MAP_TYPE);
+                String topicDeviceId = extractDeviceId(msg.topic(), HW_TOPIC_PREFIX);
+                if ((capabilityPayload.get("device_id") == null
+                    || String.valueOf(capabilityPayload.get("device_id")).isBlank())
+                    && !topicDeviceId.isBlank()) {
+                    capabilityPayload.put("device_id", topicDeviceId);
+                }
+
+                @SuppressWarnings("unchecked")
+                Map<String, Object> payload = extractPayloadMap(capabilityPayload);
+                Map<String, Object> sensors = payload.get("sensors") instanceof Map<?, ?> map
+                    ? (Map<String, Object>) map
+                    : Map.of();
+                Map<String, Object> equipments = payload.get("equipments") instanceof Map<?, ?> map
+                    ? (Map<String, Object>) map
+                    : Map.of();
+
+                String deviceId = firstNonBlank(str(capabilityPayload.get("device_id")), topicDeviceId);
+                String capabilityVersion = firstNonBlank(
+                    str(payload.get("capability_version")),
+                    str(capabilityPayload.get("protocol_version")),
+                    "2.0");
+                String checksum = firstNonBlank(str(payload.get("checksum")), str(capabilityPayload.get("checksum")));
+                Long timestamp = toLong(capabilityPayload.get("timestamp"));
+                String traceId = firstNonBlank(
+                    str(capabilityPayload.get("trace_id")),
+                    str(payload.get("trace_id")));
+
+                protocolPersistenceService.recordCapabilitySnapshot(
+                    deviceId,
+                    capabilityVersion,
+                    checksum,
+                    sensors,
+                    equipments,
+                    timestamp,
+                    msg.topic(),
+                    msg.payload(),
+                    traceId);
+                } catch (Exception e) {
+                log.warn("[Bridge] Failed to persist capability snapshot: {}", msg.topic(), e);
+                protocolPersistenceService.recordDeadletter(
+                    msg.topic(),
+                    extractDeviceId(msg.topic(), HW_TOPIC_PREFIX),
+                    "capability",
+                    e.getMessage(),
+                    msg.payload(),
+                    "");
+                }
+            });
 
         // 2) Python AI vision alert → translate to AlertInfo → store + publish to App
         subscriptionRegistry.register(PY_AI_ALERT, BRIDGE_QOS, msg -> {

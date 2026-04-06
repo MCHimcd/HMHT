@@ -28,6 +28,27 @@ applyTo: "start.ps1,scripts/tests/start.ps1.test.ps1,README.md,src/main/resource
 - README 中「运行模式」「构建与运行」章节是否同步
 - 相关测试（尤其是模式切换行为）是否仍成立
 
+修改命令重试配置 `hmht.command.retry.*` 或 `HMHT_COMMAND_RETRY_*` 时，需同步检查：
+
+- `README.md` 中环境变量表是否同步
+- `docs/backend-hardware-protocol.md` 中默认超时/重试策略是否同步
+- `src/test/java/**/CommandAckTrackerTest` 与相关桥接持久化测试是否覆盖新行为
+
+## 命令重试参数约定
+
+| 属性 | 默认值 | 说明 |
+|------|--------|------|
+| `hmht.command.retry.check-interval-ms` | `5000` | ACK 超时扫描周期 |
+| `hmht.command.retry.initial-delay-ms` | `3000` | 调度器首次启动延迟 |
+| `hmht.command.retry.max-retries` | `3` | 单条命令最大重试次数 |
+| `hmht.command.retry.default-timeout-ms` | `5000` | 命令未显式指定 timeout 时的默认超时 |
+| `hmht.command.retry.batch-size` | `200` | 单轮扫描处理上限 |
+
+建议：
+
+- 本地联调优先调低 `check-interval-ms`，不要先调高 `max-retries`
+- 若出现重复下发，先检查设备 ACK 幂等与 broker 延迟，再调整重试参数
+
 ## start.ps1 修改约定
 
 修改脚本行为时，必须关注以下点：
@@ -52,4 +73,5 @@ applyTo: "start.ps1,scripts/tests/start.ps1.test.ps1,README.md,src/main/resource
 - 可跳过 `./gradlew test`
 - 需执行与改动直接相关的验证：
   - `powershell -ExecutionPolicy Bypass -File .\scripts\tests\start.ps1.test.ps1`
+  - 若改动包含 `hmht.command.retry.*`，执行 `./gradlew test --tests "*CommandAckTrackerTest"`
   - README 文案与实际脚本参数一致性检查

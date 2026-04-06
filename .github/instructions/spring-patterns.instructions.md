@@ -104,6 +104,12 @@ public interface XxxRepository extends JpaRepository<Xxx, Long> {
 - 复杂查询用 `@Query` JPQL
 - 命名：`XxxRepository`（与 Entity 名对应）
 
+### V2 控制面查询约定（命令 ACK 重试）
+
+- 批量扫描待处理命令时，优先使用受限结果集方法：`findTop{N}ByStatusInOrderBySentAtAsc(...)`
+- 按设备维度查最近 ACK/影子时，优先使用 `findTopByDeviceIdOrderBy...Desc(...)`
+- `PENDING / SENT / RETRYING` 状态集合查询必须显式排序，避免重试顺序漂移
+
 ## 配置类模式
 
 ### @ConfigurationProperties
@@ -118,6 +124,12 @@ public class XxxProperties {
 ```
 
 在 `HmhtApplication` 上有 `@ConfigurationPropertiesScan`，无需手动注册。
+
+### 重试参数 Properties 建议
+
+- 对调度器参数（如命令 ACK 超时重试）优先使用 `@ConfigurationProperties` 聚合配置
+- 禁止在 `@Scheduled` 注解中硬编码毫秒值，统一通过属性占位符读取
+- 变更默认值时需同步 README 与协议文档
 
 ### @Configuration + @ConditionalOnProperty
 
@@ -143,6 +155,21 @@ public class XxxConfig {
 | `@Entity` + `@Table` | JPA 实体 | Entity 类 |
 | `@PostConstruct` / `@PreDestroy` | 生命周期回调 | 需要初始化/清理的 Bean |
 | `@EnableScheduling` + `@Scheduled` | 定时任务 | 已在 HmhtApplication 启用 |
+
+## 协议控制面职责边界
+
+- `ProtocolPersistenceService`：负责命令请求、ACK、重试日志、设备能力快照、设备影子等持久化写入
+- `CommandAckTracker`：负责超时扫描与重试调度，不直接承载协议翻译
+- `MqttBridge`：负责 topic 收发与协议转换，避免直接操作多张控制面表
+
+保持职责单一：桥接接入层（MQTT）与控制面持久化层（JPA）通过 Service 协作，不互相内联业务细节。
+
+## JSON 解析依赖约束
+
+- 若某 Service 仅做轻量 JSON 序列化/反序列化，优先在类内维护私有 `ObjectMapper`
+- 仅在需要全局统一配置（模块注册、日期格式、命名策略）时再注入 Spring 管理的 `ObjectMapper` Bean
+
+目的：减少测试上下文强依赖，避免 `contextLoads` 因 Bean 缺失失败。
 
 ## Token 认证模式
 

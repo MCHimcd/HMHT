@@ -2,6 +2,8 @@ package ww.wangnong.repository;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import java.time.LocalDateTime;
+import java.util.List;
 import java.util.Optional;
 
 import org.junit.jupiter.api.Test;
@@ -41,5 +43,31 @@ class CommandRequestRepositoryTest {
     @Test
     void findByCommandId_nonExistent_returnsEmpty() {
         assertThat(repo.findByCommandId("CMD-NOT-EXIST")).isEmpty();
+    }
+
+    @Test
+    void findTop200ByStatusInOrderBySentAtAsc_existingRequests_returnsSortedRequests() {
+        CommandRequest first = new CommandRequest();
+        first.setCommandId("CMD-RETRY-001");
+        first.setDeviceId("A03_Node_01");
+        first.setTargetKey("water_pump");
+        first.setAction("turn_on");
+        first.setStatus("sent");
+        first.setSentAt(LocalDateTime.now().minusMinutes(10));
+        em.persistAndFlush(first);
+
+        CommandRequest second = new CommandRequest();
+        second.setCommandId("CMD-RETRY-002");
+        second.setDeviceId("A03_Node_01");
+        second.setTargetKey("water_pump");
+        second.setAction("turn_on");
+        second.setStatus("retry");
+        second.setSentAt(LocalDateTime.now().minusMinutes(5));
+        em.persistAndFlush(second);
+
+        List<CommandRequest> found = repo.findTop200ByStatusInOrderBySentAtAsc(List.of("sent", "retry"));
+
+        assertThat(found).hasSize(2);
+        assertThat(found.getFirst().getCommandId()).isEqualTo("CMD-RETRY-001");
     }
 }

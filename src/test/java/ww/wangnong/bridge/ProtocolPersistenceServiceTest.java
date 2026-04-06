@@ -8,6 +8,7 @@ import static org.mockito.Mockito.when;
 import java.time.Instant;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
+import java.util.Map;
 import java.util.Optional;
 
 import org.junit.jupiter.api.Test;
@@ -19,9 +20,17 @@ import org.mockito.junit.jupiter.MockitoExtension;
 
 import ww.wangnong.entity.CommandAck;
 import ww.wangnong.entity.CommandRequest;
+import ww.wangnong.entity.CapabilityEquipment;
+import ww.wangnong.entity.CapabilitySensor;
+import ww.wangnong.entity.DeviceShadow;
 import ww.wangnong.entity.IngestDeadletter;
+import ww.wangnong.repository.CapabilityEquipmentRepository;
+import ww.wangnong.repository.CapabilitySensorRepository;
 import ww.wangnong.repository.CommandAckRepository;
 import ww.wangnong.repository.CommandRequestRepository;
+import ww.wangnong.repository.DeviceCapabilityRepository;
+import ww.wangnong.repository.DeviceProfileRepository;
+import ww.wangnong.repository.DeviceShadowRepository;
 import ww.wangnong.repository.IngestAuditRepository;
 import ww.wangnong.repository.IngestDeadletterRepository;
 
@@ -39,6 +48,21 @@ class ProtocolPersistenceServiceTest {
 
     @Mock
     private IngestDeadletterRepository ingestDeadletterRepository;
+
+    @Mock
+    private DeviceShadowRepository deviceShadowRepository;
+
+    @Mock
+    private DeviceProfileRepository deviceProfileRepository;
+
+    @Mock
+    private DeviceCapabilityRepository deviceCapabilityRepository;
+
+    @Mock
+    private CapabilitySensorRepository capabilitySensorRepository;
+
+    @Mock
+    private CapabilityEquipmentRepository capabilityEquipmentRepository;
 
     @InjectMocks
     private ProtocolPersistenceService service;
@@ -100,6 +124,11 @@ class ProtocolPersistenceServiceTest {
 
         verify(commandRequestRepository).save(any(CommandRequest.class));
 
+        ArgumentCaptor<DeviceShadow> shadowCaptor = ArgumentCaptor.forClass(DeviceShadow.class);
+        verify(deviceShadowRepository).save(shadowCaptor.capture());
+        assertThat(shadowCaptor.getValue().getDeviceId()).isEqualTo("A03_Node_01");
+        assertThat(shadowCaptor.getValue().getShadowJson()).contains("CMD-0002");
+
         LocalDateTime expectedAckedAt = LocalDateTime.ofInstant(Instant.ofEpochMilli(ackedAtMs), ZoneId.systemDefault());
         assertThat(request.getStatus()).isEqualTo("executed");
         assertThat(request.getAckedAt()).isEqualTo(expectedAckedAt);
@@ -125,5 +154,31 @@ class ProtocolPersistenceServiceTest {
         assertThat(saved.getMsgType()).isEqualTo("telemetry");
         assertThat(saved.getReason()).isEqualTo("invalid payload");
         assertThat(saved.getTraceId()).isEqualTo("trace-3");
+    }
+
+    @Test
+    void recordCapabilitySnapshot_validPayload_savesCapabilityDetails() {
+        service.recordCapabilitySnapshot(
+                "A03_Node_01",
+                "2.0",
+                "sha256:abc",
+                Map.of("air_temp", Map.of("data_type", "number", "unit", "C", "min", -40, "max", 120)),
+                Map.of("water_pump", Map.of("controllable", true, "actions", java.util.List.of("turn_on", "turn_off"))),
+                1765000111200L,
+                "/hmht/device/A03_Node_01/capability",
+                "{\"payload\":{}}",
+                "trace-4"
+        );
+
+        verify(deviceProfileRepository).save(any());
+        verify(deviceCapabilityRepository).save(any());
+
+        ArgumentCaptor<CapabilitySensor> sensorCaptor = ArgumentCaptor.forClass(CapabilitySensor.class);
+        verify(capabilitySensorRepository).save(sensorCaptor.capture());
+        assertThat(sensorCaptor.getValue().getSensorKey()).isEqualTo("air_temp");
+
+        ArgumentCaptor<CapabilityEquipment> equipmentCaptor = ArgumentCaptor.forClass(CapabilityEquipment.class);
+        verify(capabilityEquipmentRepository).save(equipmentCaptor.capture());
+        assertThat(equipmentCaptor.getValue().getEquipmentKey()).isEqualTo("water_pump");
     }
 }

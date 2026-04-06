@@ -7,6 +7,7 @@ import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.stream.Stream;
 
 import com.influxdb.v3.client.InfluxDBClient;
@@ -65,45 +66,25 @@ public class InfluxSensorService implements SensorService {
             }
         }
 
-        // Query aggregated data from InfluxDB using SQL
-        String sql = String.format(
-                "SELECT date_bin('%s', time) AS t, AVG(\"%s\") AS val "
-                        + "FROM environment WHERE node = '%s' AND %s "
-                        + "GROUP BY 1 ORDER BY 1",
-                interval, sanitizeMetric(metric), sanitizeTag(nodeId), rangeFilter);
+        String newSql = String.format(
+            "SELECT date_bin('%s', time) AS t, AVG(value) AS val "
+                + "FROM telemetry_metric WHERE node = '%s' AND metric = '%s' AND %s "
+                + "GROUP BY 1 ORDER BY 1",
+            interval, sanitizeTag(nodeId), sanitizeMetricTag(metric), rangeFilter);
 
-        try (Stream<Object[]> stream = influxClient.query(sql, new QueryOptions("", QueryType.SQL))) {
-            List<HistoryPoint> points = new ArrayList<>();
-            double min = Double.MAX_VALUE, max = -Double.MAX_VALUE, sum = 0;
-            int count = 0;
-
-            var iterator = stream.iterator();
-            while (iterator.hasNext()) {
-                Object[] row = iterator.next();
-                if (row.length < 2 || row[1] == null)
-                    continue;
-                Instant ts = row[0] instanceof Instant inst ? inst : Instant.parse(String.valueOf(row[0]));
-                double val = row[1] instanceof Number n ? n.doubleValue() : Double.parseDouble(String.valueOf(row[1]));
-                val = Math.round(val * 10.0) / 10.0;
-
-                String label = ts.atZone(ZoneId.systemDefault()).format(fmt);
-                points.add(new HistoryPoint(label, val));
-                min = Math.min(min, val);
-                max = Math.max(max, val);
-                sum += val;
-                count++;
-            }
-
-            if (count == 0) {
-                return new SensorHistoryResult(metric, new HistorySummary(0, 0, 0), List.of());
-            }
-            double avg = Math.round(sum / count * 10.0) / 10.0;
-            return new SensorHistoryResult(metric, new HistorySummary(max, min, avg), points);
-
-        } catch (Exception e) {
-            log.warn("[InfluxSensor] Query failed for metric={}, range={}", metric, range, e);
-            return new SensorHistoryResult(metric, new HistorySummary(0, 0, 0), List.of());
+        Optional<SensorHistoryResult> modernResult = queryHistory(metric, fmt, newSql);
+        if (modernResult.isPresent() && !modernResult.get().points().isEmpty()) {
+            return modernResult.get();
         }
+
+        String legacySql = String.format(
+            "SELECT date_bin('%s', time) AS t, AVG(\"%s\") AS val "
+                + "FROM environment WHERE node = '%s' AND %s "
+                + "GROUP BY 1 ORDER BY 1",
+            interval, sanitizeMetricField(metric), sanitizeTag(nodeId), rangeFilter);
+
+        return queryHistory(metric, fmt, legacySql)
+            .orElseGet(() -> new SensorHistoryResult(metric, new HistorySummary(0, 0, 0), List.of()));
     }
 
     @Override
@@ -175,7 +156,48 @@ public class InfluxSensorService implements SensorService {
     }
 
     /** Sanitize metric field name for use in SQL column reference. */
-    private static String sanitizeMetric(String metric) {
+    private static String sanitizeMetricField(String metric) {
         return metric.replaceAll("[^a-zA-Z0-9_]", "");
+    }
+
+    private static String sanitizeMetricTag(String metric) {
+        return metric.replaceAll("[^a-zA-Z0-9_\\-.]", "");
+    }
+
+    private Optional<SensorHistoryResult> queryHistory(String metric, DateTimeFormatter fmt, String sql) {
+        try (Stream<Object[]> stream = influxClient.query(sql, new QueryOptions("", QueryType.SQL))) {
+            List<HistoryPoint> points = new ArrayList<>();
+            double min = Double.MAX_VALUE, max = -Double.MAX_VALUE, sum = 0;
+            int count = 0;
+
+            var iterator = stream.iterator();
+            while (iterator.hasNext()) {
+                Object[] row = iterator.next();
+                if (row.length < 2 || row[1] == null) {
+                    continue;
+                }
+
+                Instant ts = row[0] instanceof Instant inst ? inst : Instant.parse(String.valueOf(row[0]));
+                double val = row[1] instanceof Number n ? n.doubleValue() : Double.parseDouble(String.valueOf(row[1]));
+                val = Math.round(val * 10.0) / 10.0;
+
+                String label = ts.atZone(ZoneId.systemDefault()).format(fmt);
+                points.add(new HistoryPoint(label, val));
+                min = Math.min(min, val);
+                max = Math.max(max, val);
+                sum += val;
+                count++;
+            }
+
+            if (count == 0) {
+                return Optional.of(new SensorHistoryResult(metric, new HistorySummary(0, 0, 0), List.of()));
+            }
+
+            double avg = Math.round(sum / count * 10.0) / 10.0;
+            return Optional.of(new SensorHistoryResult(metric, new HistorySummary(max, min, avg), points));
+        } catch (Exception e) {
+            log.warn("[InfluxSensor] Query failed for metric={}, sql={}", metric, sql, e);
+            return Optional.empty();
+        }
     }
 }

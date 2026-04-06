@@ -52,6 +52,18 @@ applyTo: "src/main/java/ww/wangnong/web/**/*.java"
    - 返回 `ApiResponse.ok(service.method(...))`
 5. **更新 README.md「REST API 端点清单」**
 
+## 设备能力接口约定（V2）
+
+当实现设备能力和影子查询时，遵循以下规则：
+
+- 推荐路径：
+  - `GET /v1/devices/{deviceId}/capability`
+  - `GET /v1/devices/{deviceId}/shadow`
+- Controller 只做参数接收和响应包装，聚合逻辑在 Service 层。
+- capability 返回结构建议包含：`deviceId`、`capabilityVersion`、`sensors[]`、`equipment[]`。
+- shadow 返回结构建议包含：`deviceId`、`shadowState`、`updatedAt`。
+- 当前基线可按无鉴权实现；若业务侧后续要求鉴权，再统一增加 `Authorization` 头提取和权限校验。
+
 ## 异常处理
 
 ```java
@@ -70,6 +82,7 @@ throw new BizException(404, "节点不存在");
 
 - **认证**：`AuthController` → `/v1/auth/login|register|send-verification-code|forgot-password|profile|password|avatar/use-fixed|logout`
 - **节点**：`NodeController` → `/v1/nodes` (GET), `/v1/nodes/{id}` (GET), `/v1/nodes/{id}/sensor-meta|equipment-meta` (GET), `/v1/nodes/{id}/sensor-thresholds` (PUT)
+- **设备能力**：`DeviceController` → `/v1/devices/{deviceId}/capability` (GET), `/v1/devices/{deviceId}/shadow` (GET)
 - **传感器**：`SensorController` → `/v1/sensors/{nodeId}/history` (GET), `/v1/equipment/stats` (POST)
 - **告警**：`AlertController` → `/v1/alerts/list|handle` (POST)
 - **任务**：`ScheduledTaskController` → `/v1/tasks` CRUD + `/v1/tasks/{id}/toggle` (PUT)

@@ -46,6 +46,7 @@
 2. ACK 至少包含：`command_id`、`status`、`ack_code`、`ack_message`、`acked_at`。
 3. `status` 使用：`accepted` / `executed` / `rejected` / `failed`。
 4. 建议 ACK 时限：收到命令后 5 秒内返回第一条 ACK。
+5. 后端默认超时重试：5 秒超时扫描、最多 3 次重发；请按 `command_id` 做幂等执行，避免重复动作。
 
 ## 6. ACK 错误码约定
 
@@ -74,6 +75,8 @@
 3. 故意发送 3 条非法命令，ACK 错误码正确。
 4. 新增 1 个自定义 sensor_key，后端可接收并可查询。
 5. 断网重连后，设备可恢复上报且 `device_id` 不变。
+6. capability 上报后，`/v1/devices/{deviceId}/capability` 可返回最新能力。
+7. ACK 到达后，`/v1/devices/{deviceId}/shadow` 可看到最新命令状态。
 
 ## 9. 交付给后端的最小信息
 
@@ -81,11 +84,13 @@
 2. 每类设备的 `target_key` 与 `action` 白名单。
 3. 每个传感器 key 的单位、值域、采样间隔。
 4. ACK 超时策略与重试策略说明。
+5. 幂等策略说明：重复 `command_id` 的处理行为（忽略/覆盖/仅回 ACK）。
 
 ## 10. 常见问题
 
 1. 命令收到但无 ACK：后端会记录超时并触发重试。
 2. 新 sensor 无法展示：先确认 capability 是否上报该 key。
-3. 时间错乱：请检查设备时钟，确保 `timestamp` 使用毫秒。
+3. 重复执行风险：请确保 `command_id` 幂等，避免重试导致重复动作。
+4. 时间错乱：请检查设备时钟，确保 `timestamp` 使用毫秒。
 
 参考协议：`docs/backend-hardware-protocol.md`

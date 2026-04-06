@@ -54,9 +54,11 @@ HMHT 支持两种运行模式，通过 `hmht.run.mode` 属性（环境变量 `HM
 | **mock**（默认） | 仅 Java 服务，启动时自动播种演示数据 | MockDataLifecycle 内存种子 + InfluxDB 30 天历史 |
 | **bridge** | Java + Python 全链路，MQTT 双向桥接 | Python agri 后端 → MQTT → MqttBridge → App |
 
-> 当前阶段（连接框架一期）仅完成硬件端基础连接框架：
-> 1) MQTT 连接生命周期管理；
-> 2) 订阅注册占位机制。
+> 当前 V2 阶段能力：
+> 1) App <-> 后端 <-> 硬件链路打通（telemetry/command/ack）；
+> 2) 设备能力与影子查询接口（`/v1/devices/{deviceId}/capability|shadow`）；
+> 3) 命令 ACK 超时重试闭环（默认 5s 超时、最多 3 次重试）；
+> 4) 控制面持久化（request/ack/retry/audit/deadletter/shadow）。
 >
 > 后端<->硬件通讯接口协议与数据格式已独立维护，见 [docs/backend-hardware-protocol.md](docs/backend-hardware-protocol.md)。
 
@@ -69,6 +71,9 @@ HMHT 支持两种运行模式，通过 `hmht.run.mode` 属性（环境变量 `HM
 | `HMHT_AGRI_CHAT_URL` | `http://localhost:5000` | Python agri chat 服务地址 |
 | `HMHT_INFLUXDB_ENABLED` | `true` | 是否启用 InfluxDB |
 | `HMHT_INFLUXDB_TOKEN` | （空） | InfluxDB 访问令牌 |
+| `HMHT_COMMAND_RETRY_CHECK_INTERVAL_MS` | `5000` | ACK 超时扫描周期（毫秒） |
+| `HMHT_COMMAND_RETRY_MAX_RETRIES` | `3` | 命令最大重试次数 |
+| `HMHT_COMMAND_RETRY_DEFAULT_TIMEOUT_MS` | `5000` | 未指定 timeout_ms 时的默认超时 |
 
 ## 构建与运行
 
@@ -115,12 +120,13 @@ powershell -ExecutionPolicy Bypass -File .\scripts\tests\start.ps1.test.ps1
 | 层次 | 注解 | 文件数 | 说明 |
 |------|------|--------|------|
 | DTO / 异常 | `@Test` (纯 JUnit) | 3 | ApiResponse、BizException、GlobalExceptionHandler |
-| 桥接与连接框架 | `@ExtendWith(MockitoExtension)` | 4 | TelemetryTranslator、MqttBridge、PahoMqttService、MqttSubscriptionRegistry |
-| Repository | `@DataJpaTest` (H2) | 7 | 13 个 Repository 的自定义查询方法 |
-| Service (Mock 实现) | `@ExtendWith(MockitoExtension)` | 9 | 8 个 Mock 实现 + OperationLogService |
-| Controller | `@WebMvcTest` | 10 | 10 个 Controller 端点验证 |
+| 桥接与连接框架 | `@ExtendWith(MockitoExtension)` | 6 | TelemetryTranslator、MqttBridge、PahoMqttService、MqttSubscriptionRegistry、Influx 动态写读、ACK 重试 |
+| Repository | `@DataJpaTest` (H2) | 11 | Repository 自定义查询与 V2 控制面仓库验证 |
+| Service (Mock 实现) | `@ExtendWith(MockitoExtension)` | 10 | Mock 业务实现与能力聚合验证 |
+| Controller | `@WebMvcTest` | 12 | 设备、节点、传感器、管理等端点验证 |
+| 启动与基础 | `@SpringBootTest` / 工具测试 | 2 | 启动冒烟与测试辅助类 |
 
-共 **34 个测试类**，覆盖 DTO → 连接框架 → Repository → Service → Controller 全链路。
+共 **44 个测试类**，覆盖 DTO → 桥接 → Repository → Service → Controller → 启动验证全链路。
 
 #### 测试约定
 
@@ -156,6 +162,13 @@ powershell -ExecutionPolicy Bypass -File .\scripts\tests\start.ps1.test.ps1
 | GET | `/v1/nodes/{nodeId}/sensor-meta` | 获取传感器元数据 | 否 |
 | GET | `/v1/nodes/{nodeId}/equipment-meta` | 获取设备元数据 | 否 |
 | PUT | `/v1/nodes/{nodeId}/sensor-thresholds` | 更新传感器阈值 | Bearer Token |
+
+### 设备能力 — DeviceController (`/v1/devices`)
+
+| 方法 | 路径 | 说明 | 认证 |
+|------|------|------|------|
+| GET | `/v1/devices/{deviceId}/capability` | 获取设备能力快照（sensor/equipment/action） | 否 |
+| GET | `/v1/devices/{deviceId}/shadow` | 获取设备影子快照（最近 ACK 状态） | 否 |
 
 ### 传感器 & 设备 — SensorController
 
@@ -248,6 +261,12 @@ powershell -ExecutionPolicy Bypass -File .\scripts\tests\start.ps1.test.ps1
 | `UserNodeAccess` | `user_node_access` | userId, nodeId(联合唯一) | 用户-节点访问权限 |
 | `CommandRequest` | `command_request` | commandId(unique), deviceId, targetKey, action, status, traceId, timeoutMs, sentAt, ackedAt | 命令闭环主表（V2） |
 | `CommandAck` | `command_ack` | commandId, deviceId, status, ackCode, ackMessage, traceId, ackedAt | 命令回执流水（V2） |
+| `CommandRetryLog` | `command_retry_log` | commandId, attemptNo, retryReason, retryAt | 命令超时重试轨迹（V2） |
+| `DeviceProfile` | `device_profile` | deviceId(unique), nodeId, displayName, hardwareModel, firmwareVersion, online, lastSeenAt | 设备档案（V2） |
+| `DeviceCapability` | `device_capability` | deviceId, capabilityVersion, checksum, reportedAt | 设备能力快照（V2） |
+| `CapabilitySensor` | `capability_sensor` | deviceId, capabilityVersion, sensorKey, dataType, unit, minValue, maxValue, requiredField | 传感器能力明细（V2） |
+| `CapabilityEquipment` | `capability_equipment` | deviceId, capabilityVersion, equipmentKey, controllable, actionsJson | 设备能力明细（V2） |
+| `DeviceShadow` | `device_shadow` | deviceId(unique), shadowJson, updatedAt | 设备状态影子（V2） |
 | `IngestAudit` | `ingest_audit` | msgType, sourceTopic, deviceId, protocolVersion, traceId, status, errorMessage | 消息接入审计（V2） |
 | `IngestDeadletter` | `ingest_deadletter` | msgType, sourceTopic, deviceId, traceId, reason, rawPayload | 消息死信队列（V2） |
 
@@ -261,6 +280,7 @@ Service 接口定义在 `ww.wangnong.service`，根据运行模式由不同实�
 | `NodeService` | `MockNodeService` | — | 节点 & 传感器元数据 |
 | `AlertService` | `MockAlertService` | — | 告警查询 & 处理 |
 | `SensorService` | `MockSensorService` | `InfluxSensorService` | 传感器历史 & 设备统计 |
+| `DeviceService` | `MockDeviceService` | `BridgeDeviceService` | 设备能力 & 设备影子查询 |
 | `ChatService` | `MockChatService` | `AgriChatService` | AI 对话 |
 | `ExtraService` | `MockExtraService` | — | 溯源 & 摄像头 |
 | `AdminService` | `MockAdminService` | — | 管理员操作 |
@@ -279,6 +299,7 @@ Service 接口定义在 `ww.wangnong.service`，根据运行模式由不同实�
 | `TelemetryTranslator` | `bridge/` | Python → App 遥测字段映射 |
 | `InfluxTelemetryWriter` | `bridge/` | 翻译后遥测写入 InfluxDB |
 | `ProtocolPersistenceService` | `bridge/` | V2 控制面持久化（命令请求、ACK、审计、死信） |
+| `CommandAckTracker` | `bridge/` | ACK 超时扫描与命令重试（bridge 模式） |
 | `InfluxTelemetryService` | `influx/` | InfluxDB 低级写入（Line Protocol） |
 | `PahoMqttService` | `mqtt/` | Eclipse Paho MQTT 客户端封装（连接生命周期快照、重连重订阅） |
 | `MqttSubscriptionRegistry` | `mqtt/` | MQTT 订阅注册占位机制，统一管理 bridge 主题处理器 |
@@ -289,6 +310,7 @@ Service 接口定义在 `ww.wangnong.service`，根据运行模式由不同实�
 |------------|----------|------|
 | `AuthController` | `/v1/auth` | 登录、注册、验证码、密码、资料 |
 | `NodeController` | `/v1/nodes` | 节点列表、详情、传感器/设备元数据、阈值 |
+| `DeviceController` | `/v1/devices` | 设备能力快照与设备影子查询 |
 | `SensorController` | `/v1/sensors`, `/v1/equipment` | 传感器历史数据、设备统计 |
 | `AlertController` | `/v1/alerts` | 告警查询与处理 |
 | `ScheduledTaskController` | `/v1/tasks` | 定时任务 CRUD |
@@ -326,9 +348,10 @@ Service 接口定义在 `ww.wangnong.service`，根据运行模式由不同实�
 
 ### 桥接逻辑（MqttBridge）
 
-1. 通过 `MqttSubscriptionRegistry` 注册并绑定 6 个桥接主题：
+1. 通过 `MqttSubscriptionRegistry` 注册并绑定 7 个桥接主题：
 	- `/agri/device/+/telemetry`
 	- `/hmht/device/+/telemetry`
+	- `/hmht/device/+/capability`
 	- `/agri/ai_vision/alert`
 	- `/wangnong_2026/node/+/command`
 	- `/agri/device/+/ack`
@@ -338,13 +361,15 @@ Service 接口定义在 `ww.wangnong.service`，根据运行模式由不同实�
 4. App 命令同时转发到历史兼容 topic `/agri/device/{deviceId}/command` 与硬件直连 topic `/hmht/device/{deviceId}/command`
 5. 硬件 ACK 从 `/hmht/device/{deviceId}/ack` 透传到 `/wangnong_2026/node/{nodeId}/ack`
 6. AI 视觉告警解析置信度映射告警级别（≥0.85 critical，≥0.6 warning，其他 info）
-7. 遥测同时写入 InfluxDB（通过 `InfluxTelemetryWriter`）
+7. 硬件 capability 从 `/hmht/device/{deviceId}/capability` 入库到 capability/profile 明细表
+8. 遥测写入 InfluxDB：动态 measurement `telemetry_metric`（并兼容写入 legacy `environment`）
+9. bridge 模式定时扫描超时命令：默认 5 秒超时、最多 3 次重试，超过阈值标记 `timeout`
 
-### 连接框架一期边界（兼容说明）
+### V2 兼容边界（兼容说明）
 
-- 本期只建设“连接框架能力”：连接生命周期管理 + 订阅注册扩展点。
-- 本期不变更现有业务 topic 与 payload 契约，确保与 App/Python 现有链路兼容。
-- 后续新硬件链路按独立协议文档演进，并在当前注册机制上增量扩展，不影响现有桥接行为。
+- 保持历史 agri 主题与 payload 解析兼容，App 侧无需修改订阅即可继续接收数据。
+- 新增 hmht 主题能力（telemetry/capability/ack）通过后端桥接增量接入，不破坏旧链路。
+- 动态 sensor/equipment key 允许透传和落库，查询层优先走新时序模型并保留 legacy 回退。
 
 ### 遥测字段映射（TelemetryTranslator）
 

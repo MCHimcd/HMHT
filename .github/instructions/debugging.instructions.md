@@ -42,6 +42,7 @@ applyTo: "src/**/*.java"
 | `BeanCreationException` | Bean 创建失败 | 检查构造器注入参数、@ConditionalOnProperty 配置 |
 | `NoSuchBeanDefinitionException` | 找不到 Bean | 确认 @Service/@Component 注解和包扫描范围 |
 | `BeanCurrentlyInCreationException` | 循环依赖 | 重构代码消除循环引用 |
+| `No qualifying bean of type 'ObjectMapper'` | 新增 Service 依赖了上下文未提供的 Bean | 对仅本地 JSON 解析场景，优先在类内创建私有 ObjectMapper；或显式提供 Bean |
 | `DataSource` 相关异常 | MySQL 连接失败 | 检查 MySQL 是否运行、URL/用户名/密码是否正确 |
 | `FlywayValidateException` | 迁移脚本变更 | 不要修改已执行的迁移脚本，新增 V{N+1}__xxx.sql |
 | `Port already in use: 8080` | 端口占用 | `netstat -ano | findstr :8080` 找进程并终止 |
@@ -72,6 +73,8 @@ applyTo: "src/**/*.java"
 3. **检查客户端 ID 冲突**：多实例运行时 `hmht-server` 可能冲突，确保唯一
 4. **检查日志**：搜索 `PahoMqttService` 和 `MqttBridge` 日志输出
 5. **检查主题订阅**：bridge 模式需订阅 `/agri/device/+/telemetry` 和 `/agri/ai_vision/alert`
+6. **检查 V2 主题**：硬件链路需确认 `/hmht/device/+/telemetry`、`/hmht/device/+/capability`、`/hmht/device/+/ack`
+7. **检查重试循环**：确认 `hmht.command.retry.*` 参数是否合理，避免误判重试风暴
 
 ### 使用 InfraController 测试
 
@@ -129,3 +132,4 @@ curl -X POST http://localhost:8080/api/infra/mqtt/publish \
 | `ApplicationContextError` | 测试上下文加载失败 | 检查 `src/test/resources/application.properties` 配置 |
 | H2 SQL 语法错误 | H2 与 MySQL 语法差异 | 使用 H2 兼容模式或调整 SQL |
 | Bean 冲突 | Mock/Bridge 实现同时加载 | 测试中用 `@TestPropertySource` 指定 `hmht.run.mode` |
+| contextLoads 因依赖缺失失败 | 新增组件引入了额外 Bean 依赖 | 为组件减小依赖面或在测试上下文提供替身 Bean |

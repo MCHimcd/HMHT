@@ -95,7 +95,10 @@ public class MockDataLifecycle implements ApplicationRunner {
     @PreDestroy
     public void cleanup() {
         log.info("[MockData] 正在清除数据库数据...");
-        String[] tables = { "scheduled_tasks", "operation_logs", "user_node_access",
+        String[] tables = { "command_retry_log", "device_shadow", "capability_equipment",
+            "capability_sensor", "device_capability", "device_profile",
+            "command_ack", "command_request", "ingest_deadletter", "ingest_audit",
+            "scheduled_tasks", "operation_logs", "user_node_access",
                 "chat_messages", "command_logs", "alerts", "node_sensor",
                 "node_equipment", "sensor_type", "equipment_type",
                 "verification_codes", "nodes", "users" };

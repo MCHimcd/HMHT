@@ -38,8 +38,13 @@ public class InfluxTelemetryWriter {
             return;
         }
         try {
+            WriteOptions opts = new WriteOptions(null, WritePrecision.MS, null);
+
+            // Dual-write for compatibility: keep legacy environment measurement and write the
+            // dynamic metric measurement for new queries.
             StringBuilder envLine = new StringBuilder("environment,node=").append(escape(nodeId)).append(' ');
             Map<String, Object> envData = TelemetryTranslator.extractEnvironment(appPayload);
+            String source = resolveSource(appPayload);
             boolean hasField = false;
             for (var entry : envData.entrySet()) {
                 if (entry.getValue() instanceof Number n) {
@@ -47,10 +52,15 @@ public class InfluxTelemetryWriter {
                         envLine.append(',');
                     envLine.append(escape(entry.getKey())).append('=').append(n.doubleValue());
                     hasField = true;
+
+                    String metricLine = "telemetry_metric,node=" + escape(nodeId)
+                            + ",metric=" + escape(entry.getKey())
+                            + ",source=" + escape(source)
+                            + " value=" + n.doubleValue();
+                    influxClient.writeRecord(metricLine, opts);
                 }
             }
             if (hasField) {
-                WriteOptions opts = new WriteOptions(null, WritePrecision.MS, null);
                 influxClient.writeRecord(envLine.toString(), opts);
             }
 
@@ -61,12 +71,23 @@ public class InfluxTelemetryWriter {
                 String status = val instanceof Boolean b ? (b ? "on" : "off") : String.valueOf(val);
                 String eqLine = "equipment_state,node=" + escape(nodeId) + ",equipment=" + escape(eqName)
                         + " status=\"" + status + "\"";
-                WriteOptions opts = new WriteOptions(null, WritePrecision.MS, null);
                 influxClient.writeRecord(eqLine, opts);
             }
         } catch (Exception e) {
             log.warn("[InfluxWriter] Failed to write telemetry for node {}", nodeId, e);
         }
+    }
+
+    @SuppressWarnings("unchecked")
+    private static String resolveSource(Map<String, Object> appPayload) {
+        Object dataObj = appPayload.get("data");
+        if (dataObj instanceof Map<?, ?> data) {
+            Object protocolVersion = ((Map<String, Object>) data).get("protocol_version");
+            if (protocolVersion != null && !String.valueOf(protocolVersion).isBlank()) {
+                return "hw_v2";
+            }
+        }
+        return "agri_v1";
     }
 
     private static String escape(String tag) {

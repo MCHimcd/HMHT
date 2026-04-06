@@ -51,6 +51,21 @@ class SensorControllerTest {
     }
 
     @Test
+    void getSensorHistory_customMetricAndRange_returnsResult() throws Exception {
+        when(sensorService.getSensorHistory("N01", "custom_sensor_x", "7d"))
+                .thenReturn(new SensorHistoryResult("custom_sensor_x",
+                        new HistorySummary(88.0, 11.0, 49.5),
+                        List.of(new HistoryPoint("04-06 10:00", 49.5))));
+
+        mockMvc.perform(get("/v1/sensors/N01/history")
+                .param("metric", "custom_sensor_x")
+                .param("range", "7d"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.code").value(200))
+                .andExpect(jsonPath("$.data.metric").value("custom_sensor_x"));
+    }
+
+    @Test
     void getEquipmentStats_returnsResult() throws Exception {
         when(sensorService.getEquipmentStats(eq("A03_Node_01"), eq("water_pump")))
                 .thenReturn(new EquipmentStatsResult(

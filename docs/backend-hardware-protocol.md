@@ -146,6 +146,7 @@
 - `command_id` 全局唯一（建议业务前缀 + 时间 + 序号）。
 - `target_key`、`action` 由设备 capability 声明决定。
 - 设备应在 `timeout_ms` 内返回 ack（超时由后端重试策略处理）。
+- 后端默认重试策略：`timeout_ms=5000`（缺省）、扫描周期 5 秒、最大重试 3 次，超过后标记 `timeout`。
 
 ## 6. ACK 数据格式
 
@@ -243,15 +244,21 @@
 
 `telemetry_metric`：
 
-- tags：`device_id`, `sensor_key`, `unit`, `source`, `protocol_version`
-- fields：`value_num`, `value_str`, `value_bool`, `quality`, `trace_id`
-- time：`timestamp`（ms 对齐）
+- tags：`node`, `metric`, `source`
+- fields：`value`
+- time：写入时按 Influx 精度（ms）对齐
+
+说明：
+
+- `node` 与协议中的 `device_id` 语义一致（后端桥接层统一映射）。
+- `source` 当前约定：`hw_v2` / `agri_v1`。
+- 为兼容历史查询，后端仍保留 `environment` 的 legacy 双写。
 
 `equipment_state`：
 
-- tags：`device_id`, `equipment_key`, `source`, `protocol_version`
-- fields：`state`, `trace_id`
-- time：`timestamp`（ms 对齐）
+- tags：`node`, `equipment`
+- fields：`status`
+- time：写入时按 Influx 精度（ms）对齐
 
 规则：
 

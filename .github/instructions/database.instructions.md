@@ -28,6 +28,7 @@ V{N}__{description}.sql
 ### 当前迁移
 
 - `V1__init.sql` — 初始化 13 张表（users, nodes, sensor_type, node_sensor, equipment_type, node_equipment, alerts, command_logs, chat_messages, verification_codes, scheduled_tasks, operation_logs, user_node_access）
+- `V2__device_protocol_control_plane.sql` — 新增协议控制面 10 张表（device_profile, device_capability, capability_sensor, capability_equipment, command_request, command_ack, command_retry_log, device_shadow, ingest_audit, ingest_deadletter）
 
 ## JPA Entity 编写约定
 
@@ -100,6 +101,16 @@ public class XxxEntity {
 | `scheduled_tasks` | — | 定时设备控制任务 |
 | `operation_logs` | — | 操作审计日志 |
 | `user_node_access` | `(user_id, node_id)` unique | 用户-节点访问权限 |
+| `device_profile` | `device_id` (unique) | 设备档案（V2） |
+| `device_capability` | `(device_id, created_at)` index | 设备能力快照（V2） |
+| `capability_sensor` | `(device_id, capability_version, sensor_key)` unique | 传感器能力明细（V2） |
+| `capability_equipment` | `(device_id, capability_version, equipment_key)` unique | 设备能力明细（V2） |
+| `command_request` | `command_id` (unique) | 命令主状态（V2） |
+| `command_ack` | `command_id` index | 命令回执流水（V2） |
+| `command_retry_log` | `(command_id, created_at)` index | 命令重试轨迹（V2） |
+| `device_shadow` | `device_id` (unique) | 设备影子快照（V2） |
+| `ingest_audit` | `(msg_type, created_at)` index | 接入审计（V2） |
+| `ingest_deadletter` | `(msg_type, created_at)` index | 死信队列（V2） |
 
 ## Repository 约定
 
@@ -119,11 +130,18 @@ public interface XxxRepository extends JpaRepository<Xxx, Long> {
 }
 ```
 
+V2 控制面常见查询模式：
+
+- 最新快照：`findTopByDeviceIdOrderByCreatedAtDesc(...)`
+- 扫描待处理命令：`findTop200ByStatusInOrderBySentAtAsc(List.of("sent", "retry"))`
+- 影子按设备查：`findByDeviceId(...)`
+- 重试统计：`countByCommandId(...)`
+
 ## MockDataLifecycle 注意事项
 
 - **激活条件**：`hmht.run.mode=mock`（默认模式）
 - **启动行为**：若 `users` 表为空则播种全部演示数据（包括 InfluxDB 30 天历史），否则只重建 5 条种子告警
-- **关闭行为**（`@PreDestroy`）：TRUNCATE 12 张表（禁用外键检查），**会清除所有数据**
+- **关闭行为**（`@PreDestroy`）：TRUNCATE mock + V2 控制面相关表（禁用外键检查），**会清除所有数据**
 - **安全门控**：通过 `hmht.mock.seed.enabled` 属性控制，防止生产环境意外触发
 - 修改种子数据时注意保持与 Entity 定义和 V1__init.sql 表结构的一致性
 
