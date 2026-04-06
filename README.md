@@ -40,6 +40,7 @@ HMHT/
 ├── src/test/java/ww/wangnong/         # 测试
 ├── start.ps1                          # 一键启动脚本（本地开发）
 ├── docs/deployment.md                 # 云部署指南
+├── docs/backend-hardware-protocol.md  # 后端<->硬件通讯协议（V2）
 └── .github/workflows/deploy.yml       # GitHub Actions 部署工作流
 ```
 
@@ -56,7 +57,7 @@ HMHT 支持两种运行模式，通过 `hmht.run.mode` 属性（环境变量 `HM
 > 1) MQTT 连接生命周期管理；
 > 2) 订阅注册占位机制。
 >
-> 具体硬件接口协议与数据格式将在后续迭代按硬件设计确定。
+> 后端<->硬件通讯接口协议与数据格式已独立维护，见 [docs/backend-hardware-protocol.md](docs/backend-hardware-protocol.md)。
 
 ### 环境变量
 
@@ -294,6 +295,9 @@ Service 接口定义在 `ww.wangnong.service`，根据运行模式由不同实�
 
 ## MQTT 协议
 
+后端<->硬件通讯协议（V2）已独立维护，详见 [docs/backend-hardware-protocol.md](docs/backend-hardware-protocol.md)。
+本节保留当前 bridge 兼容主题与实现摘要（含历史 agri 链路）。
+
 ### 主题约定
 
 | 方向 | 主题 | 说明 |
@@ -317,11 +321,11 @@ Service 接口定义在 `ww.wangnong.service`，根据运行模式由不同实�
 4. AI 视觉告警解析置信度映射告警级别（≥0.85 critical，≥0.6 warning，其他 info）
 5. 同时写入 InfluxDB（通过 `InfluxTelemetryWriter`）
 
-### 连接框架一期边界（协议待定）
+### 连接框架一期边界（兼容说明）
 
 - 本期只建设“连接框架能力”：连接生命周期管理 + 订阅注册扩展点。
 - 本期不变更现有业务 topic 与 payload 契约，确保与 App/Python 现有链路兼容。
-- 后续如接入新硬件协议，将在当前注册机制上增量扩展，不影响现有桥接行为。
+- 后续新硬件链路按独立协议文档演进，并在当前注册机制上增量扩展，不影响现有桥接行为。
 
 ### 遥测字段映射（TelemetryTranslator）
 
@@ -334,9 +338,9 @@ Service 接口定义在 `ww.wangnong.service`，根据运行模式由不同实�
 | `soil_ph` | `soilPh` |
 | `light_intensity` | `light` |
 | `co2_ppm` | `co2` |
-| `soil_n` | `soil_n` |
-| `soil_p` | `soil_p` |
-| `soil_k` | `soil_k` |
+| `soil_n` | `soilN` |
+| `soil_p` | `soilP` |
+| `soil_k` | `soilK` |
 
 ## 与 agri 项目的协作
 
