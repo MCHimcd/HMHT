@@ -298,7 +298,16 @@ Service 接口定义在 `ww.wangnong.service`，根据运行模式由不同实�
 后端<->硬件通讯协议（V2）已独立维护，详见 [docs/backend-hardware-protocol.md](docs/backend-hardware-protocol.md)。
 本节保留当前 bridge 兼容主题与实现摘要（含历史 agri 链路）。
 
-### 主题约定
+### 硬件直连主题（V2）
+
+| 方向 | 主题 | 说明 |
+|------|------|------|
+| Device → HMHT | `/hmht/device/{deviceId}/telemetry` | 硬件设备遥测上报 |
+| HMHT → Device | `/hmht/device/{deviceId}/command` | 后端下发设备控制命令 |
+| Device → HMHT | `/hmht/device/{deviceId}/ack` | 硬件命令回执 |
+| HMHT → App | `/wangnong_2026/node/{nodeId}/ack` | 回执透传给 App |
+
+### 历史兼容主题（agri）
 
 | 方向 | 主题 | 说明 |
 |------|------|------|
@@ -311,15 +320,19 @@ Service 接口定义在 `ww.wangnong.service`，根据运行模式由不同实�
 
 ### 桥接逻辑（MqttBridge）
 
-1. 通过 `MqttSubscriptionRegistry` 注册并绑定 4 个桥接主题：
+1. 通过 `MqttSubscriptionRegistry` 注册并绑定 6 个桥接主题：
 	- `/agri/device/+/telemetry`
+	- `/hmht/device/+/telemetry`
 	- `/agri/ai_vision/alert`
 	- `/wangnong_2026/node/+/command`
 	- `/agri/device/+/ack`
-2. 通过 `TelemetryTranslator` 翻译字段名（如 `air_temp` → `temperature`）
-3. 发布到 App 端主题 `/wangnong_2026/node/{nodeId}/telemetry`
-4. AI 视觉告警解析置信度映射告警级别（≥0.85 critical，≥0.6 warning，其他 info）
-5. 同时写入 InfluxDB（通过 `InfluxTelemetryWriter`）
+	- `/hmht/device/+/ack`
+2. 历史 agri 遥测通过 `TelemetryTranslator.pyToApp()` 转译后发布到 `/wangnong_2026/node/{nodeId}/telemetry`
+3. 新硬件 V2 遥测通过 `TelemetryTranslator.hardwareV2ToApp()` 规范化后发布到 `/wangnong_2026/node/{nodeId}/telemetry`
+4. App 命令同时转发到历史兼容 topic `/agri/device/{deviceId}/command` 与硬件直连 topic `/hmht/device/{deviceId}/command`
+5. 硬件 ACK 从 `/hmht/device/{deviceId}/ack` 透传到 `/wangnong_2026/node/{nodeId}/ack`
+6. AI 视觉告警解析置信度映射告警级别（≥0.85 critical，≥0.6 warning，其他 info）
+7. 遥测同时写入 InfluxDB（通过 `InfluxTelemetryWriter`）
 
 ### 连接框架一期边界（兼容说明）
 

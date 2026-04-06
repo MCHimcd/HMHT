@@ -77,6 +77,74 @@ public final class TelemetryTranslator {
     }
 
     /**
+     * Normalize a V2 hardware telemetry envelope to App-format telemetry payload.
+     * Input:  { msg_type, protocol_version, device_id, timestamp, trace_id, payload:{sensors,equipments,mode} }
+     * Output: { msg_type, node_id, timestamp, data:{environment,equipment,mode,protocol_version,trace_id} }
+     */
+    @SuppressWarnings("unchecked")
+    public static Map<String, Object> hardwareV2ToApp(Map<String, Object> hwPayload) {
+        Map<String, Object> result = new LinkedHashMap<>();
+        result.put("msg_type", hwPayload.getOrDefault("msg_type", "telemetry"));
+        result.put("node_id", hwPayload.get("device_id"));
+        result.put("timestamp", hwPayload.get("timestamp"));
+
+        Object payloadObj = hwPayload.get("payload");
+        if (!(payloadObj instanceof Map<?, ?> payload)) {
+            result.put("data", payloadObj);
+            return result;
+        }
+
+        Map<String, Object> appData = new LinkedHashMap<>();
+
+        Object sensorsObj = payload.get("sensors");
+        if (sensorsObj instanceof Map<?, ?> sensors) {
+            Map<String, Object> appEnv = new LinkedHashMap<>();
+            for (var entry : ((Map<String, Object>) sensors).entrySet()) {
+                String appKey = ENV_PY_TO_APP.getOrDefault(entry.getKey(), entry.getKey());
+                Object normalized = unwrapValue(entry.getValue(), "value");
+                if (normalized != null) {
+                    appEnv.put(appKey, normalized);
+                }
+            }
+            if (!appEnv.isEmpty()) {
+                appData.put("environment", appEnv);
+            }
+        }
+
+        Object eqObj = payload.get("equipments");
+        if (eqObj instanceof Map<?, ?> equipments) {
+            Map<String, Object> appEquipment = new LinkedHashMap<>();
+            for (var entry : ((Map<String, Object>) equipments).entrySet()) {
+                Object normalized = unwrapValue(entry.getValue(), "state");
+                if (normalized != null) {
+                    appEquipment.put(entry.getKey(), normalized);
+                }
+            }
+            if (!appEquipment.isEmpty()) {
+                appData.put("equipment", appEquipment);
+            }
+        }
+
+        Object modeObj = payload.get("mode");
+        if (modeObj != null) {
+            appData.put("mode", modeObj);
+        }
+
+        Object protocolVersion = hwPayload.get("protocol_version");
+        if (protocolVersion != null) {
+            appData.put("protocol_version", protocolVersion);
+        }
+
+        Object traceId = hwPayload.get("trace_id");
+        if (traceId != null) {
+            appData.put("trace_id", traceId);
+        }
+
+        result.put("data", appData);
+        return result;
+    }
+
+    /**
      * Extract the environment map from an already-translated App-format telemetry for InfluxDB write.
      * Returns flat key-value pairs: { temperature: 25.0, humidity: 60.0, ... }
      */
@@ -105,5 +173,13 @@ public final class TelemetryTranslator {
             }
         }
         return Map.of();
+    }
+
+    private static Object unwrapValue(Object valueOrMap, String field) {
+        if (valueOrMap instanceof Map<?, ?> map) {
+            Object nested = map.get(field);
+            return nested != null ? nested : valueOrMap;
+        }
+        return valueOrMap;
     }
 }

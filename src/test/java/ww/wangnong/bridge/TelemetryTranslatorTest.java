@@ -143,4 +143,73 @@ class TelemetryTranslatorTest {
 
         assertThat(result).isEmpty();
     }
+
+    @Test
+    void hardwareV2ToApp_mapsDynamicSensorsAndEquipmentState() {
+        Map<String, Object> hwPayload = new LinkedHashMap<>();
+        hwPayload.put("msg_type", "telemetry");
+        hwPayload.put("protocol_version", "2.0");
+        hwPayload.put("device_id", "D01");
+        hwPayload.put("timestamp", 1700000000000L);
+        hwPayload.put("trace_id", "trace-1");
+
+        Map<String, Object> payload = new LinkedHashMap<>();
+        Map<String, Object> sensors = new LinkedHashMap<>();
+        sensors.put("air_temp", Map.of("value", 26.4, "unit", "C"));
+        sensors.put("custom_sensor_x", Map.of("value", 88.2, "unit", "ppm"));
+        payload.put("sensors", sensors);
+
+        Map<String, Object> equipments = new LinkedHashMap<>();
+        equipments.put("water_pump", Map.of("state", "on"));
+        equipments.put("custom_device_y", Map.of("state", "standby"));
+        payload.put("equipments", equipments);
+        payload.put("mode", "manual");
+        hwPayload.put("payload", payload);
+
+        Map<String, Object> result = TelemetryTranslator.hardwareV2ToApp(hwPayload);
+
+        assertThat(result.get("msg_type")).isEqualTo("telemetry");
+        assertThat(result.get("node_id")).isEqualTo("D01");
+        assertThat(result.get("timestamp")).isEqualTo(1700000000000L);
+
+        @SuppressWarnings("unchecked")
+        Map<String, Object> data = (Map<String, Object>) result.get("data");
+        @SuppressWarnings("unchecked")
+        Map<String, Object> env = (Map<String, Object>) data.get("environment");
+        @SuppressWarnings("unchecked")
+        Map<String, Object> equipment = (Map<String, Object>) data.get("equipment");
+
+        assertThat(env.get("temperature")).isEqualTo(26.4);
+        assertThat(env.get("custom_sensor_x")).isEqualTo(88.2);
+        assertThat(equipment.get("water_pump")).isEqualTo("on");
+        assertThat(equipment.get("custom_device_y")).isEqualTo("standby");
+        assertThat(data.get("mode")).isEqualTo("manual");
+        assertThat(data.get("protocol_version")).isEqualTo("2.0");
+        assertThat(data.get("trace_id")).isEqualTo("trace-1");
+    }
+
+    @Test
+    void hardwareV2ToApp_whenSensorItemIsPrimitive_preservesPrimitiveValue() {
+        Map<String, Object> hwPayload = new LinkedHashMap<>();
+        hwPayload.put("msg_type", "telemetry");
+        hwPayload.put("device_id", "D01");
+        hwPayload.put("timestamp", 1700000000000L);
+
+        Map<String, Object> payload = new LinkedHashMap<>();
+        payload.put("sensors", Map.of("soil_moisture", 41.2));
+        payload.put("equipments", Map.of("fan", true));
+        hwPayload.put("payload", payload);
+
+        Map<String, Object> result = TelemetryTranslator.hardwareV2ToApp(hwPayload);
+
+        @SuppressWarnings("unchecked")
+        Map<String, Object> data = (Map<String, Object>) result.get("data");
+        @SuppressWarnings("unchecked")
+        Map<String, Object> env = (Map<String, Object>) data.get("environment");
+        @SuppressWarnings("unchecked")
+        Map<String, Object> equipment = (Map<String, Object>) data.get("equipment");
+
+        assertThat(env.get("soilHumidity")).isEqualTo(41.2);
+        assertThat(equipment.get("fan")).isEqualTo(true);
+    }
 }

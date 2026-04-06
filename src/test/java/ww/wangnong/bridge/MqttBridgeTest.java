@@ -36,9 +36,11 @@ class MqttBridgeTest {
         bridge.init();
 
         verify(subscriptionRegistry).register(eq("/agri/device/+/telemetry"), eq(1), any());
+        verify(subscriptionRegistry).register(eq("/hmht/device/+/telemetry"), eq(1), any());
         verify(subscriptionRegistry).register(eq("/agri/ai_vision/alert"), eq(1), any());
         verify(subscriptionRegistry).register(eq("/wangnong_2026/node/+/command"), eq(1), any());
         verify(subscriptionRegistry).register(eq("/agri/device/+/ack"), eq(1), any());
+        verify(subscriptionRegistry).register(eq("/hmht/device/+/ack"), eq(1), any());
         verify(subscriptionRegistry).bindAll(mqttService);
         verifyNoInteractions(alertService, influxTelemetryWriter);
     }
