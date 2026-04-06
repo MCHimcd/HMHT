@@ -16,16 +16,16 @@
 
 - **修改代码前**：先阅读 `README.md` 了解项目架构、约定和现有清单。
 - **修改代码后**：如果变更涉及以下内容，**必须同步更新 README.md 对应章节**：
-  - 新增 / 删除 / 重命名 Controller → 更新「Controller 清单」和「REST API 端点清单」
-  - 新增 / 删除 / 修改 REST 端点 → 更新「REST API 端点清单」
-  - 新增 / 删除 / 修改 Entity → 更新「数据模型清单」
-  - 新增 / 删除 / 修改 Service 接口或实现 → 更新「服务清单」
-  - 新增 / 修改 MQTT 主题或桥接逻辑 → 更新「MQTT 协议」章节
-  - 修改 Flyway 迁移脚本 → 更新「数据库迁移」章节
-  - 修改安全配置 → 更新「安全架构」章节
-  - 修改环境变量或运行模式 → 更新「运行模式」章节
-  - 修改构建配置或 Docker 编排 → 更新「构建与运行」章节
-  - 修改与 agri 项目的交互 → 更新「与 agri 项目的协作」章节
+   - 新增 / 删除 / 重命名 Controller → 更新「Controller 清单」和「REST API 端点清单」
+   - 新增 / 删除 / 修改 REST 端点 → 更新「REST API 端点清单」
+   - 新增 / 删除 / 修改 Entity → 更新「数据模型清单」
+   - 新增 / 删除 / 修改 Service 接口或实现 → 更新「服务清单」
+   - 新增 / 修改 MQTT 主题或桥接逻辑 → 更新「MQTT 协议」章节
+   - 修改 Flyway 迁移脚本 → 更新「数据库迁移」章节
+   - 修改安全配置 → 更新「安全架构」章节
+   - 修改环境变量或运行模式 → 更新「运行模式」章节
+   - 修改构建配置或部署流程 → 更新「构建与运行」章节
+   - 修改与 agri 项目的交互 → 更新「与 agri 项目的协作」章节
 
 ## Java 编码约束
 
@@ -76,7 +76,7 @@
 
 ### 非 Java 变更例外
 
-若本次改动 **仅涉及非 Java 内容**（例如：`*.ps1`、`README.md`、`.github/instructions/**`、`docker-compose.yml`、`Dockerfile`、`.github/workflows/**`），且未修改 `src/main/java/**`、`src/test/java/**`、`build.gradle`、`settings.gradle` 等 Java 构建/测试相关文件，则：
+若本次改动 **仅涉及非 Java 内容**（例如：`*.ps1`、`README.md`、`.github/instructions/**`、`.github/workflows/**`），且未修改 `src/main/java/**`、`src/test/java/**`、`build.gradle`、`settings.gradle` 等 Java 构建/测试相关文件，则：
 
 - 可跳过 `./gradlew clean bootJar`
 - 可跳过 `./gradlew test`

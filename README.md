@@ -15,7 +15,6 @@
 | 安全 | Spring Security + OAuth2 Resource Server | — |
 | MQTT | Eclipse Paho Client | 1.2.5 |
 | 时序数据库 | InfluxDB 3 (influxdb3-java) | 1.0.0 |
-| 容器化 | Docker + Docker Compose | — |
 | CI/CD | GitHub Actions | — |
 
 ## 项目结构
@@ -39,8 +38,6 @@ HMHT/
 │   ├── application.properties         # 主配置文件
 │   └── db/migration/V1__init.sql      # Flyway 初始化脚本
 ├── src/test/java/ww/wangnong/         # 测试
-├── docker-compose.yml                 # 容器编排（全链路）
-├── Dockerfile                         # Spring Boot JAR 镜像
 ├── start.ps1                          # 一键启动脚本（本地开发）
 ├── docs/deployment.md                 # 云部署指南
 └── .github/workflows/deploy.yml       # GitHub Actions 部署工作流
@@ -82,18 +79,12 @@ HMHT 支持两种运行模式，通过 `hmht.run.mode` 属性（环境变量 `HM
 ### 本地开发（全链路）
 
 ```powershell
-.\start.ps1 -Mode bridge
+.\start.ps1
 ```
 
 支持参数：`-Mode mock|bridge`、`-PythonDir`、`-JavaDir`、`-AgriChatPort`、`-InfluxDir`、`-InfluxToken`。要求已安装 Windows Terminal（`wt.exe`）。
 
 `start.ps1` 启动后会在主终端实时展示各服务状态（Starting/Running/Stopping/Stopped/Failed），并在 Ctrl+C 时执行统一停机：先优雅停止，超时后强制回收，确保标签页与子进程同步退出。
-
-### Docker Compose（全链路）
-
-```bash
-docker compose up -d
-```
 
 ### 编译 JAR
 
