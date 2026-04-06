@@ -56,15 +56,18 @@ public class MqttBridge {
     private final AlertService alertService;
     private final InfluxTelemetryWriter influxWriter;
     private final MqttSubscriptionRegistry subscriptionRegistry;
+    private final ProtocolPersistenceService protocolPersistenceService;
 
     public MqttBridge(PahoMqttService mqtt,
             AlertService alertService,
             InfluxTelemetryWriter influxWriter,
-            MqttSubscriptionRegistry subscriptionRegistry) {
+            MqttSubscriptionRegistry subscriptionRegistry,
+            ProtocolPersistenceService protocolPersistenceService) {
         this.mqtt = mqtt;
         this.alertService = alertService;
         this.influxWriter = influxWriter;
         this.subscriptionRegistry = subscriptionRegistry;
+        this.protocolPersistenceService = protocolPersistenceService;
     }
 
     @PostConstruct
@@ -75,8 +78,24 @@ public class MqttBridge {
                 Map<String, Object> pyPayload = MAPPER.readValue(msg.payload(), MAP_TYPE);
                 Map<String, Object> appPayload = TelemetryTranslator.pyToApp(pyPayload);
                 forwardTelemetry(msg.topic(), appPayload);
+
+                protocolPersistenceService.recordIngestAudit(
+                        "telemetry",
+                        msg.topic(),
+                        str(pyPayload.get("device_id")),
+                        str(pyPayload.get("protocol_version")),
+                        str(pyPayload.get("trace_id")),
+                        "forwarded",
+                        null);
             } catch (Exception e) {
                 log.warn("[Bridge] Failed to bridge telemetry: {}", msg.topic(), e);
+                protocolPersistenceService.recordDeadletter(
+                        msg.topic(),
+                        "",
+                        "telemetry",
+                        e.getMessage(),
+                        msg.payload(),
+                        "");
             }
         });
 
@@ -92,8 +111,24 @@ public class MqttBridge {
 
                 Map<String, Object> appPayload = TelemetryTranslator.hardwareV2ToApp(hwPayload);
                 forwardTelemetry(msg.topic(), appPayload);
+
+                protocolPersistenceService.recordIngestAudit(
+                        "telemetry",
+                        msg.topic(),
+                        str(hwPayload.get("device_id")),
+                        str(hwPayload.get("protocol_version")),
+                        str(hwPayload.get("trace_id")),
+                        "forwarded",
+                        null);
             } catch (Exception e) {
                 log.warn("[Bridge] Failed to bridge hardware telemetry: {}", msg.topic(), e);
+                protocolPersistenceService.recordDeadletter(
+                        msg.topic(),
+                        "",
+                        "telemetry",
+                        e.getMessage(),
+                        msg.payload(),
+                        "");
             }
         });
 
@@ -121,24 +156,61 @@ public class MqttBridge {
                 mqtt.publish(pyTopic, msg.payload(), 1, false);
 
                 String hwTopic = HW_TOPIC_PREFIX + deviceId + "/command";
-                String hwEnvelope = toHardwareCommandEnvelope(deviceId, msg.payload());
-                mqtt.publish(hwTopic, hwEnvelope, 1, false);
+                HardwareCommandEnvelope hwEnvelope = toHardwareCommandEnvelope(deviceId, msg.payload());
+                mqtt.publish(hwTopic, hwEnvelope.rawJson(), 1, false);
+
+                protocolPersistenceService.recordCommandDispatched(
+                        deviceId,
+                        hwEnvelope.commandId(),
+                        hwEnvelope.targetKey(),
+                        hwEnvelope.action(),
+                        hwEnvelope.traceId(),
+                        hwEnvelope.timeoutMs(),
+                        topic,
+                        hwTopic,
+                        hwEnvelope.rawJson());
+
+                protocolPersistenceService.recordIngestAudit(
+                        "command",
+                        topic,
+                        deviceId,
+                        hwEnvelope.protocolVersion(),
+                        hwEnvelope.traceId(),
+                        "forwarded",
+                        null);
 
                 log.debug("[Bridge] Command forwarded: {} → {} and {}", topic, pyTopic, hwTopic);
             } catch (Exception e) {
                 log.warn("[Bridge] Failed to bridge command: {}", msg.topic(), e);
+                protocolPersistenceService.recordDeadletter(
+                        msg.topic(),
+                        extractDeviceId(msg.topic(), APP_TOPIC_PREFIX),
+                        "command",
+                        e.getMessage(),
+                        msg.payload(),
+                        "");
             }
         });
 
         // 4) Python command ACK → log only
         subscriptionRegistry.register(PY_ACK, BRIDGE_QOS, msg -> {
             log.info("[Bridge] Command ACK received: topic={}, payload={}", msg.topic(), msg.payload());
+            protocolPersistenceService.recordIngestAudit(
+                    "ack",
+                    msg.topic(),
+                    extractDeviceId(msg.topic(), PY_TOPIC_PREFIX),
+                    "1.0",
+                    "",
+                    "received",
+                    null);
         });
 
         // 4.1) Hardware ACK → relay to App ACK topic + log
         subscriptionRegistry.register(HW_ACK, BRIDGE_QOS, msg -> {
             try {
                 Map<String, Object> ackPayload = MAPPER.readValue(msg.payload(), MAP_TYPE);
+                @SuppressWarnings("unchecked")
+                Map<String, Object> ackData = extractPayloadMap(ackPayload);
                 String nodeId = firstNonBlank(
                         str(ackPayload.get("device_id")),
                         extractDeviceId(msg.topic(), HW_TOPIC_PREFIX));
@@ -150,15 +222,50 @@ public class MqttBridge {
 
                 String appAckTopic = APP_TOPIC_PREFIX + nodeId + "/ack";
                 mqtt.publish(appAckTopic, msg.payload(), 1, false);
+
+                String commandId = str(ackData.get("command_id"));
+                String status = str(ackData.get("status"));
+                Integer ackCode = toInt(ackData.get("ack_code"));
+                String ackMessage = str(ackData.get("ack_message"));
+                Long ackedAt = toLong(ackData.get("acked_at"));
+                String traceId = firstNonBlank(str(ackPayload.get("trace_id")), str(ackData.get("trace_id")));
+
+                protocolPersistenceService.recordAckReceived(
+                    nodeId,
+                    commandId,
+                    status,
+                    ackCode,
+                    ackMessage,
+                    ackedAt,
+                    msg.payload(),
+                    msg.topic(),
+                    traceId);
+
+                protocolPersistenceService.recordIngestAudit(
+                    "ack",
+                    msg.topic(),
+                    nodeId,
+                    str(ackPayload.get("protocol_version")),
+                    traceId,
+                    "relayed",
+                    null);
+
                 log.info("[Bridge] Hardware ACK relayed: {} → {}", msg.topic(), appAckTopic);
             } catch (Exception e) {
                 log.warn("[Bridge] Failed to relay hardware ACK: {}", msg.topic(), e);
+                protocolPersistenceService.recordDeadletter(
+                        msg.topic(),
+                        extractDeviceId(msg.topic(), HW_TOPIC_PREFIX),
+                        "ack",
+                        e.getMessage(),
+                        msg.payload(),
+                        "");
             }
         });
 
         subscriptionRegistry.bindAll(mqtt);
 
-        log.info("[Bridge] MQTT Bridge initialized — bridging /agri/ ↔ /wangnong_2026/");
+        log.info("[Bridge] MQTT Bridge initialized — bridging /agri/ + /hmht/ ↔ /wangnong_2026/");
     }
 
     private void forwardTelemetry(String sourceTopic, Map<String, Object> appPayload) throws Exception {
@@ -175,7 +282,7 @@ public class MqttBridge {
     }
 
     @SuppressWarnings("unchecked")
-    private String toHardwareCommandEnvelope(String deviceId, String appPayloadRaw) throws Exception {
+    private HardwareCommandEnvelope toHardwareCommandEnvelope(String deviceId, String appPayloadRaw) {
         try {
             Map<String, Object> command = MAPPER.readValue(appPayloadRaw, MAP_TYPE);
 
@@ -184,7 +291,17 @@ public class MqttBridge {
                 command.putIfAbsent("device_id", deviceId);
                 command.putIfAbsent("timestamp", System.currentTimeMillis());
                 command.putIfAbsent("trace_id", UUID.randomUUID().toString());
-                return MAPPER.writeValueAsString(command);
+                Map<String, Object> payload = (Map<String, Object>) command.get("payload");
+                String commandId = firstNonBlank(str(payload.get("command_id")), "CMD-" + UUID.randomUUID().toString().substring(0, 8));
+                payload.put("command_id", commandId);
+                String targetKey = firstNonBlank(str(payload.get("target_key")), "unknown");
+                String action = firstNonBlank(str(payload.get("action")), "noop");
+                int timeoutMs = toInt(payload.get("timeout_ms"), 5000);
+                String traceId = str(command.get("trace_id"));
+                String protocolVersion = firstNonBlank(str(command.get("protocol_version")), "2.0");
+                String rawJson = MAPPER.writeValueAsString(command);
+                return new HardwareCommandEnvelope(rawJson, commandId, targetKey, action, traceId, timeoutMs,
+                        protocolVersion);
             }
 
             Map<String, Object> action = command.get("action") instanceof Map<?, ?>
@@ -203,8 +320,9 @@ public class MqttBridge {
                     str(command.get("action")),
                     str(command.get("command")));
 
+                    String commandId = "CMD-" + UUID.randomUUID().toString().substring(0, 8);
             Map<String, Object> commandPayload = new LinkedHashMap<>();
-            commandPayload.put("command_id", "CMD-" + UUID.randomUUID().toString().substring(0, 8));
+                    commandPayload.put("command_id", commandId);
             commandPayload.put("target_key", targetKey.isBlank() ? "unknown" : targetKey);
             commandPayload.put("action", actionName.isBlank() ? "noop" : actionName);
 
@@ -216,20 +334,29 @@ public class MqttBridge {
                 commandPayload.put("params", new LinkedHashMap<>((Map<String, Object>) params));
             }
 
-            Object timeout = command.getOrDefault("timeout_ms", 5000);
-            commandPayload.put("timeout_ms", timeout);
+            int timeoutMs = toInt(command.getOrDefault("timeout_ms", 5000), 5000);
+            commandPayload.put("timeout_ms", timeoutMs);
 
             Map<String, Object> envelope = new LinkedHashMap<>();
             envelope.put("msg_type", "command");
             envelope.put("protocol_version", "2.0");
             envelope.put("device_id", deviceId);
             envelope.put("timestamp", System.currentTimeMillis());
-            envelope.put("trace_id", UUID.randomUUID().toString());
+            String traceId = UUID.randomUUID().toString();
+            envelope.put("trace_id", traceId);
             envelope.put("payload", commandPayload);
-            return MAPPER.writeValueAsString(envelope);
+            String rawJson = MAPPER.writeValueAsString(envelope);
+            return new HardwareCommandEnvelope(rawJson,
+                    commandId,
+                    commandPayload.get("target_key").toString(),
+                    commandPayload.get("action").toString(),
+                    traceId,
+                    timeoutMs,
+                    "2.0");
         } catch (Exception parseError) {
+            String commandId = "CMD-" + UUID.randomUUID().toString().substring(0, 8);
             Map<String, Object> payload = new LinkedHashMap<>();
-            payload.put("command_id", "CMD-" + UUID.randomUUID().toString().substring(0, 8));
+            payload.put("command_id", commandId);
             payload.put("target_key", "unknown");
             payload.put("action", "noop");
             payload.put("raw_payload", appPayloadRaw);
@@ -240,9 +367,15 @@ public class MqttBridge {
             envelope.put("protocol_version", "2.0");
             envelope.put("device_id", deviceId);
             envelope.put("timestamp", System.currentTimeMillis());
-            envelope.put("trace_id", UUID.randomUUID().toString());
+            String traceId = UUID.randomUUID().toString();
+            envelope.put("trace_id", traceId);
             envelope.put("payload", payload);
-            return MAPPER.writeValueAsString(envelope);
+            try {
+                String rawJson = MAPPER.writeValueAsString(envelope);
+                return new HardwareCommandEnvelope(rawJson, commandId, "unknown", "noop", traceId, 5000, "2.0");
+            } catch (Exception writeError) {
+                return new HardwareCommandEnvelope("{}", commandId, "unknown", "noop", traceId, 5000, "2.0");
+            }
         }
     }
 
@@ -269,6 +402,62 @@ public class MqttBridge {
             }
         }
         return "";
+    }
+
+    @SuppressWarnings("unchecked")
+    private static Map<String, Object> extractPayloadMap(Map<String, Object> envelope) {
+        Object payload = envelope.get("payload");
+        if (payload instanceof Map<?, ?> map) {
+            return (Map<String, Object>) map;
+        }
+        return envelope;
+    }
+
+    private static Integer toInt(Object value) {
+        return toInt(value, null);
+    }
+
+    private static int toInt(Object value, int fallback) {
+        Integer parsed = toInt(value, null);
+        return parsed == null ? fallback : parsed;
+    }
+
+    private static Integer toInt(Object value, Integer fallback) {
+        if (value == null) {
+            return fallback;
+        }
+        if (value instanceof Number n) {
+            return n.intValue();
+        }
+        try {
+            return Integer.parseInt(String.valueOf(value));
+        } catch (Exception e) {
+            return fallback;
+        }
+    }
+
+    private static Long toLong(Object value) {
+        if (value == null) {
+            return null;
+        }
+        if (value instanceof Number n) {
+            return n.longValue();
+        }
+        try {
+            return Long.parseLong(String.valueOf(value));
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
+    private record HardwareCommandEnvelope(
+            String rawJson,
+            String commandId,
+            String targetKey,
+            String action,
+            String traceId,
+            Integer timeoutMs,
+            String protocolVersion) {
     }
 
     @SuppressWarnings("unchecked")

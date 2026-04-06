@@ -29,9 +29,17 @@ class MqttBridgeTest {
     @Mock
     private MqttSubscriptionRegistry subscriptionRegistry;
 
+    @Mock
+    private ProtocolPersistenceService protocolPersistenceService;
+
     @Test
     void init_registersAllBridgeRoutesThroughRegistry() {
-        MqttBridge bridge = new MqttBridge(mqttService, alertService, influxTelemetryWriter, subscriptionRegistry);
+        MqttBridge bridge = new MqttBridge(
+            mqttService,
+            alertService,
+            influxTelemetryWriter,
+            subscriptionRegistry,
+            protocolPersistenceService);
 
         bridge.init();
 
@@ -42,6 +50,6 @@ class MqttBridgeTest {
         verify(subscriptionRegistry).register(eq("/agri/device/+/ack"), eq(1), any());
         verify(subscriptionRegistry).register(eq("/hmht/device/+/ack"), eq(1), any());
         verify(subscriptionRegistry).bindAll(mqttService);
-        verifyNoInteractions(alertService, influxTelemetryWriter);
+        verifyNoInteractions(alertService, influxTelemetryWriter, protocolPersistenceService);
     }
 }

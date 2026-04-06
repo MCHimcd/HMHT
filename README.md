@@ -36,11 +36,12 @@ HMHT/
 │   └── exception/                     # 全局异常处理
 ├── src/main/resources/
 │   ├── application.properties         # 主配置文件
-│   └── db/migration/V1__init.sql      # Flyway 初始化脚本
+│   └── db/migration/                   # Flyway 迁移（V1 初始化 + V2 协议控制面）
 ├── src/test/java/ww/wangnong/         # 测试
 ├── start.ps1                          # 一键启动脚本（本地开发）
 ├── docs/deployment.md                 # 云部署指南
 ├── docs/backend-hardware-protocol.md  # 后端<->硬件通讯协议（V2）
+├── docs/hardware-team-action-guide.md # 硬件成员执行指南（V2 对接）
 └── .github/workflows/deploy.yml       # GitHub Actions 部署工作流
 ```
 
@@ -245,6 +246,10 @@ powershell -ExecutionPolicy Bypass -File .\scripts\tests\start.ps1.test.ps1
 | `OperationLog` | `operation_logs` | userId, userName, operationType, targetType, targetId, detail(TEXT), ipAddress | 操作审计日志 |
 | `VerificationCode` | `verification_codes` | phone, code, expiresAt, used | 验证码 |
 | `UserNodeAccess` | `user_node_access` | userId, nodeId(联合唯一) | 用户-节点访问权限 |
+| `CommandRequest` | `command_request` | commandId(unique), deviceId, targetKey, action, status, traceId, timeoutMs, sentAt, ackedAt | 命令闭环主表（V2） |
+| `CommandAck` | `command_ack` | commandId, deviceId, status, ackCode, ackMessage, traceId, ackedAt | 命令回执流水（V2） |
+| `IngestAudit` | `ingest_audit` | msgType, sourceTopic, deviceId, protocolVersion, traceId, status, errorMessage | 消息接入审计（V2） |
+| `IngestDeadletter` | `ingest_deadletter` | msgType, sourceTopic, deviceId, traceId, reason, rawPayload | 消息死信队列（V2） |
 
 ## 服务清单
 
@@ -273,6 +278,7 @@ Service 接口定义在 `ww.wangnong.service`，根据运行模式由不同实�
 | `MqttBridge` | `bridge/` | Python ↔ App MQTT 双向桥接 |
 | `TelemetryTranslator` | `bridge/` | Python → App 遥测字段映射 |
 | `InfluxTelemetryWriter` | `bridge/` | 翻译后遥测写入 InfluxDB |
+| `ProtocolPersistenceService` | `bridge/` | V2 控制面持久化（命令请求、ACK、审计、死信） |
 | `InfluxTelemetryService` | `influx/` | InfluxDB 低级写入（Line Protocol） |
 | `PahoMqttService` | `mqtt/` | Eclipse Paho MQTT 客户端封装（连接生命周期快照、重连重订阅） |
 | `MqttSubscriptionRegistry` | `mqtt/` | MQTT 订阅注册占位机制，统一管理 bridge 主题处理器 |
@@ -367,10 +373,15 @@ Service 接口定义在 `ww.wangnong.service`，根据运行模式由不同实�
 
 **AgriChatService** 通过 `RestClient` 将 App 端的 AI 对话请求代理到 Python Flask 服务（multipart 表单，支持图片上传），并维护 `userId → sessionId` 会话映射。
 
+## 硬件团队对接
+
+- 协议规范：`docs/backend-hardware-protocol.md`
+- 执行清单：`docs/hardware-team-action-guide.md`
+
 ## 数据库迁移
 
 - 迁移目录：`src/main/resources/db/migration/`
-- 当前版本：`V1__init.sql`（13 张表初始化）
+- 当前版本：`V2__device_protocol_control_plane.sql`（在 V1 基础上新增协议控制面 10 张表）
 - Flyway 命名规范：`V{N}__{description}.sql`（双下划线分隔）
 - JPA DDL 策略：`spring.jpa.hibernate.ddl-auto=update`（Flyway 创建基础表，Hibernate 补充变更）
 
