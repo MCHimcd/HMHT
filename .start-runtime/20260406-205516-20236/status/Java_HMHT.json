@@ -1,0 +1,10 @@
+﻿{
+    "name":  "Java HMHT",
+    "kind":  "java",
+    "state":  "Running",
+    "shellPid":  33764,
+    "childPid":  44912,
+    "exitCode":  0,
+    "message":  "gradlew.bat --no-daemon bootRun",
+    "updatedAt":  "2026-04-06 22:41:46"
+}

@@ -4,15 +4,22 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 
 /**
- * Translates telemetry payloads between Python (agri) format and App (wangnong) format.
+ * Translates telemetry payloads between Python (agri) format and App (wangnong)
+ * format.
  * Python → App direction: field renaming + structure normalization.
  * App → Python direction: reverse mapping for commands.
  */
 public final class TelemetryTranslator {
 
-    private TelemetryTranslator() {}
+    private TelemetryTranslator() {
+    }
 
-    // ── Python environment key → App sensor key ──
+    // ── Source environment key → App sensor key ──
+    // Note: The key names are historically from Python-side telemetry, but hardware
+    // V2
+    // payload.sensors intentionally reuses the same canonical keys, so this map is
+    // shared
+    // by both pyToApp(...) and hardwareV2ToApp(...).
     private static final Map<String, String> ENV_PY_TO_APP = Map.of(
             "air_temp", "temperature",
             "air_humidity", "humidity",
@@ -26,13 +33,16 @@ public final class TelemetryTranslator {
             "soil_k", "soilK");
 
     // ── Python equipment_status key → App equipment key (mostly 1:1) ──
+    // Hardware V2 equipments are also treated as 1:1 key pass-through.
     // heater, misting, co2_generator, fertilizer are new equipment from Python side
     // water_pump, led_light, fan, camera are shared
 
     /**
      * Translate a Python-format telemetry payload to App-format.
-     * Input:  { msg_type, device_id, timestamp, data: { environment:{air_temp,...}, equipment_status:{...}, system_mode } }
-     * Output: { msg_type, device_id, timestamp, data: { environment:{temperature,...}, equipment:{...}, mode } }
+     * Input: { msg_type, device_id, timestamp, data: { environment:{air_temp,...},
+     * equipment_status:{...}, system_mode } }
+     * Output: { msg_type, device_id, timestamp, data: {
+     * environment:{temperature,...}, equipment:{...}, mode } }
      */
     @SuppressWarnings("unchecked")
     public static Map<String, Object> pyToApp(Map<String, Object> pyPayload) {
@@ -78,8 +88,11 @@ public final class TelemetryTranslator {
 
     /**
      * Normalize a V2 hardware telemetry envelope to App-format telemetry payload.
-     * Input:  { msg_type, protocol_version, device_id, timestamp, trace_id, payload:{sensors,equipments,mode} }
-     * Output: { msg_type, node_id, timestamp, data:{environment,equipment,mode,protocol_version,trace_id} }
+     * Sensor key mapping reuses ENV_PY_TO_APP to keep one canonical key dictionary.
+     * Input: { msg_type, protocol_version, device_id, timestamp, trace_id,
+     * payload:{sensors,equipments,mode} }
+     * Output: { msg_type, node_id, timestamp,
+     * data:{environment,equipment,mode,protocol_version,trace_id} }
      */
     @SuppressWarnings("unchecked")
     public static Map<String, Object> hardwareV2ToApp(Map<String, Object> hwPayload) {
@@ -145,7 +158,8 @@ public final class TelemetryTranslator {
     }
 
     /**
-     * Extract the environment map from an already-translated App-format telemetry for InfluxDB write.
+     * Extract the environment map from an already-translated App-format telemetry
+     * for InfluxDB write.
      * Returns flat key-value pairs: { temperature: 25.0, humidity: 60.0, ... }
      */
     @SuppressWarnings("unchecked")
@@ -161,7 +175,8 @@ public final class TelemetryTranslator {
     }
 
     /**
-     * Extract the equipment map from an already-translated App-format telemetry for InfluxDB write.
+     * Extract the equipment map from an already-translated App-format telemetry for
+     * InfluxDB write.
      */
     @SuppressWarnings("unchecked")
     public static Map<String, Object> extractEquipment(Map<String, Object> appPayload) {

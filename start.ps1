@@ -85,6 +85,28 @@ function Write-Banner {
     Write-Host "======================================" -ForegroundColor Cyan
 }
 
+function ConvertTo-CommandLineArgumentString {
+    param([string[]]$Arguments)
+
+    $result = New-Object System.Collections.Generic.List[string]
+    foreach ($arg in $Arguments) {
+        if ($null -eq $arg -or $arg.Length -eq 0) {
+            $result.Add('""')
+            continue
+        }
+
+        if ($arg -notmatch '[\s"]') {
+            $result.Add($arg)
+            continue
+        }
+
+        $escaped = $arg.Replace('"', '\"')
+        $result.Add('"' + $escaped + '"')
+    }
+
+    return ($result -join ' ')
+}
+
 function ConvertTo-SafeName {
     param([string]$Name)
 
@@ -226,13 +248,13 @@ function Render-ServiceStatusTable {
     $index = 1
     foreach ($svc in $Services) {
         $st = Read-ServiceStatus -Service $svc
-        $pid = if ($st.childPid -and $st.childPid -gt 0) { [string]$st.childPid } else { "-" }
+        $displayPid = if ($st.childPid -and $st.childPid -gt 0) { [string]$st.childPid } else { "-" }
         $msg = if ([string]::IsNullOrWhiteSpace($st.message)) { "-" } else { $st.message }
         if ($msg.Length -gt 34) {
             $msg = $msg.Substring(0, 34) + "..."
         }
 
-        $line = "{0,-3} {1,-22} {2,-10} {3,-8} {4,-19} {5}" -f $index, $svc.Name, $st.state, $pid, $st.updatedAt, $msg
+        $line = "{0,-3} {1,-22} {2,-10} {3,-8} {4,-19} {5}" -f $index, $svc.Name, $st.state, $displayPid, $st.updatedAt, $msg
         switch ($st.state) {
             "Running" { Write-Host $line -ForegroundColor Green }
             "Starting" { Write-Host $line -ForegroundColor Cyan }
@@ -279,19 +301,24 @@ function Start-ServiceTab {
         "-RuntimeDir", $StatusDir,
         "-StopSignalFile", $StopSignalFile,
         "-WorkerHmhtMode", $Mode,
-        "-WorkerAgriChatPort", "$AgriChatPort",
-        "-WorkerInfluxToken", $InfluxToken
+        "-WorkerAgriChatPort", "$AgriChatPort"
     )
 
     if (-not [string]::IsNullOrWhiteSpace($Service.Entry)) {
         $tabArgs += @("-WorkerEntry", $Service.Entry)
     }
 
-    if ($CaptureProcess) {
-        return Start-Process -FilePath "wt" -ArgumentList $tabArgs -PassThru
+    if (-not [string]::IsNullOrWhiteSpace($InfluxToken)) {
+        $tabArgs += @("-WorkerInfluxToken", $InfluxToken)
     }
 
-    Start-Process -FilePath "wt" -ArgumentList $tabArgs | Out-Null
+    $tabArgumentLine = ConvertTo-CommandLineArgumentString -Arguments $tabArgs
+
+    if ($CaptureProcess) {
+        return Start-Process -FilePath "wt" -ArgumentList $tabArgumentLine -PassThru
+    }
+
+    Start-Process -FilePath "wt" -ArgumentList $tabArgumentLine | Out-Null
     return $null
 }
 
@@ -331,6 +358,68 @@ function Try-CreateInfluxToken {
         Write-Warning "Influx token 自动创建失败：$($_.Exception.Message)"
         return ""
     }
+}
+
+function Resolve-InfluxToken {
+    param(
+        [string]$InfluxExe,
+        [string]$InfluxDir,
+        [string]$CurrentToken,
+        [int]$MaxAttempts = 5,
+        [int]$RetrySeconds = 2
+    )
+
+    $tokenDir = Join-Path $InfluxDir "data"
+    $tokenFile = Join-Path $tokenDir "hmht-admin.token"
+
+    if (-not [string]::IsNullOrWhiteSpace($CurrentToken)) {
+        try {
+            if (-not (Test-Path $tokenDir)) {
+                New-Item -ItemType Directory -Path $tokenDir -Force | Out-Null
+            }
+            Set-Content -Path $tokenFile -Value $CurrentToken -Encoding UTF8 -NoNewline
+        }
+        catch {
+            Write-Verbose "Failed to persist provided Influx token: $($_.Exception.Message)"
+        }
+        return $CurrentToken
+    }
+
+    if (Test-Path $tokenFile) {
+        try {
+            $cachedToken = (Get-Content -Path $tokenFile -Raw -Encoding UTF8).Trim()
+            if (-not [string]::IsNullOrWhiteSpace($cachedToken)) {
+                Write-Host "[*] 使用已缓存的 InfluxDB token。" -ForegroundColor DarkGray
+                return $cachedToken
+            }
+        }
+        catch {
+            Write-Verbose "Failed to read cached Influx token: $($_.Exception.Message)"
+        }
+    }
+
+    for ($attempt = 1; $attempt -le $MaxAttempts; $attempt++) {
+        $created = Try-CreateInfluxToken -InfluxExe $InfluxExe -CurrentToken ""
+        if (-not [string]::IsNullOrWhiteSpace($created)) {
+            try {
+                if (-not (Test-Path $tokenDir)) {
+                    New-Item -ItemType Directory -Path $tokenDir -Force | Out-Null
+                }
+                Set-Content -Path $tokenFile -Value $created -Encoding UTF8 -NoNewline
+            }
+            catch {
+                Write-Verbose "Failed to persist created Influx token: $($_.Exception.Message)"
+            }
+            return $created
+        }
+
+        if ($attempt -lt $MaxAttempts) {
+            Write-Host "[*] InfluxDB token 获取失败，${RetrySeconds}s 后重试 (${attempt}/${MaxAttempts})..." -ForegroundColor DarkGray
+            Start-Sleep -Seconds $RetrySeconds
+        }
+    }
+
+    return ""
 }
 
 function Invoke-Worker {
@@ -381,11 +470,7 @@ function Invoke-Worker {
                 $env:HMHT_RUN_MODE = $WorkerHmhtMode
                 $env:HMHT_MOCK_SEED_ENABLED = "true"
                 $env:HMHT_AGRI_CHAT_URL = "http://localhost:$WorkerAgriChatPort"
-                if ([string]::IsNullOrWhiteSpace($WorkerInfluxToken)) {
-                    $env:HMHT_INFLUXDB_ENABLED = "false"
-                    $env:HMHT_INFLUXDB_TOKEN = ""
-                }
-                else {
+                if (-not [string]::IsNullOrWhiteSpace($WorkerInfluxToken)) {
                     $env:HMHT_INFLUXDB_ENABLED = "true"
                     $env:HMHT_INFLUXDB_TOKEN = $WorkerInfluxToken
                 }
@@ -536,8 +621,9 @@ foreach ($svc in $services) {
 
     if ($svc.Kind -eq "influx") {
         Start-Sleep -Seconds 3
+        $InfluxToken = Resolve-InfluxToken -InfluxExe $influxExe -InfluxDir $InfluxDir -CurrentToken $InfluxToken
         if ([string]::IsNullOrWhiteSpace($InfluxToken)) {
-            $InfluxToken = Try-CreateInfluxToken -InfluxExe $influxExe -CurrentToken $InfluxToken
+            Write-Warning "未获取到 InfluxDB token，后续时序写入可能返回 401（不影响 MQTT 转发）。可通过 -InfluxToken 显式传入。"
         }
     }
 

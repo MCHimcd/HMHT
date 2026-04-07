@@ -40,6 +40,13 @@
 3. 设备状态建议使用结构：`{"state": "on"}`。
 4. 新增 key 不需要等待后端改代码，但需要在能力上报中声明。
 
+推荐优先使用与 App 对齐的标准键名：
+
+1. `sensors`（硬件 key）：`air_temp`、`air_humidity`、`soil_temp`、`soil_moisture`、`soil_ph`、`light_intensity`、`co2_ppm`、`soil_n`、`soil_p`、`soil_k`
+2. 上述 `sensors` 在 App 中会映射为：`temperature`、`humidity`、`soilTemp`、`soilHumidity`、`soilPh`、`light`、`co2`、`soilN`、`soilP`、`soilK`
+3. `equipments`（硬件 key = App key）：`water_pump`、`water_valve`、`led_light`、`fan`、`camera`、`heater`、`misting`、`co2_generator`、`fertilizer`
+4. `equipments.<key>.state` 建议优先用：`on` / `off`（多态设备可扩展 `standby` / `running` / `fault`）
+
 ## 5. 命令执行与 ACK 要求
 
 1. 接收到命令后按 `payload.command_id` 原样回传 ACK。

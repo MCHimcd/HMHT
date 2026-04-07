@@ -125,6 +125,55 @@
 | `state` | string/bool | 是 | 设备状态，如 `on`/`off`/`standby` |
 | `params` | object | 否 | 设备参数快照 |
 
+### 4.4 与 App 对齐的最终键名（推荐标准）
+
+说明：
+
+- 硬件侧 `payload.sensors` 使用下表左列键名上报，后端桥接后会转换为 App 侧最终键名（右列）。
+- 硬件侧 `payload.equipments` 与 App 侧 `data.equipment` 当前为同名透传（无重命名）。
+- 未知 key 允许透传，但若希望 App 有稳定展示与单位，建议优先使用本节标准键名。
+
+#### 4.4.1 sensors 键名映射（硬件 -> App）
+
+| 硬件上报 key (`payload.sensors`) | App 最终 key (`data.environment`) | 建议单位 | 说明 |
+|---|---|---|---|
+| `air_temp` | `temperature` | `C` | 空气温度 |
+| `air_humidity` | `humidity` | `%` | 空气湿度 |
+| `soil_temp` | `soilTemp` | `C` | 土壤温度 |
+| `soil_moisture` | `soilHumidity` | `%` | 土壤湿度 |
+| `soil_ph` | `soilPh` | （无） | 土壤酸碱度 |
+| `light_intensity` | `light` | `Lux` | 光照强度 |
+| `co2_ppm` | `co2` | `ppm` | 二氧化碳浓度 |
+| `soil_n` | `soilN` | `mg/kg`（建议） | 土壤氮 |
+| `soil_p` | `soilP` | `mg/kg`（建议） | 土壤磷 |
+| `soil_k` | `soilK` | `mg/kg`（建议） | 土壤钾 |
+
+建议：
+
+- 统一采用 `snake_case` 的硬件 key（如 `air_temp`）。
+- 若上报自定义传感器（如 `custom_sensor_x`），可透传；但 App 若需统一图标/单位/排序，需在 capability 中声明并补充前端元数据。
+
+#### 4.4.2 equipments 键名（硬件 = App）
+
+以下设备 key 可直接与 App 对齐使用：
+
+| `payload.equipments` key | App `data.equipment` key | 典型含义 |
+|---|---|---|
+| `water_pump` | `water_pump` | 水泵 |
+| `water_valve` | `water_valve` | 水阀 |
+| `led_light` | `led_light` | 补光灯 |
+| `fan` | `fan` | 风机 |
+| `camera` | `camera` | 摄像头 |
+| `heater` | `heater` | 加热器 |
+| `misting` | `misting` | 喷雾 |
+| `co2_generator` | `co2_generator` | 二氧化碳发生器 |
+| `fertilizer` | `fertilizer` | 施肥装置 |
+
+`state` 建议值：
+
+- 开关型：`on` / `off`
+- 多态设备：`standby` / `running` / `fault`（也可用布尔值，后端会转字符串入库）
+
 ## 5. Command 数据格式
 
 ### 5.1 Payload 结构

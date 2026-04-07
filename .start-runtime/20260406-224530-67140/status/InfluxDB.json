@@ -1,0 +1,10 @@
+﻿{
+    "name":  "InfluxDB",
+    "kind":  "influx",
+    "state":  "Running",
+    "shellPid":  44612,
+    "childPid":  61852,
+    "exitCode":  0,
+    "message":  "influxdb3 serve",
+    "updatedAt":  "2026-04-06 22:46:30"
+}

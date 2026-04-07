@@ -1,0 +1,10 @@
+﻿{
+    "name":  "Java HMHT",
+    "kind":  "java",
+    "state":  "Failed",
+    "shellPid":  67452,
+    "childPid":  0,
+    "exitCode":  1,
+    "message":  "无法覆盖变量 Pid，因为该变量为只读变量或常量。",
+    "updatedAt":  "2026-04-06 22:45:04"
+}
