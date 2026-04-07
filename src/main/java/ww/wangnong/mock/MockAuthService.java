@@ -1,16 +1,23 @@
 package ww.wangnong.mock;
 
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.Map;
 import java.util.Random;
+import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Service;
+import org.springframework.web.multipart.MultipartFile;
 
 import ww.wangnong.entity.User;
 import ww.wangnong.entity.VerificationCode;
@@ -25,11 +32,19 @@ public class MockAuthService implements AuthService {
 
     private static final Logger log = LoggerFactory.getLogger(MockAuthService.class);
     private static final Random RNG = new Random();
+    private static final Set<String> ALLOWED_CONTENT_TYPES = Set.of("image/png", "image/jpeg", "image/jpg");
+    private static final long MAX_FILE_SIZE = 5 * 1024 * 1024; // 5MB
 
     private final UserRepository userRepo;
     private final VerificationCodeRepository codeRepo;
     private final OperationLogService opLog;
     private final Map<String, Long> tokenToUserId = new ConcurrentHashMap<>();
+
+    @Value("${hmht.upload.avatar-dir:uploads/avatars}")
+    private String avatarDir;
+
+    @Value("${server.port:8080}")
+    private int serverPort;
 
     public MockAuthService(UserRepository userRepo, VerificationCodeRepository codeRepo,
             OperationLogService opLog) {
@@ -125,6 +140,69 @@ public class MockAuthService implements AuthService {
         user.setAvatarSrc("https://example.com/fixed-avatar.png");
         userRepo.save(user);
         return toProfile(user);
+    }
+
+    @Override
+    public Profile uploadAvatar(String token, MultipartFile file) {
+        User user = requireUser(token);
+
+        if (file == null || file.isEmpty()) {
+            throw new BizException(400, "文件不能为空");
+        }
+
+        String contentType = file.getContentType();
+        if (contentType == null || !ALLOWED_CONTENT_TYPES.contains(contentType.toLowerCase())) {
+            throw new BizException(400, "仅支持 PNG/JPEG 格式图片");
+        }
+
+        if (file.getSize() > MAX_FILE_SIZE) {
+            throw new BizException(400, "文件大小不能超过 5MB");
+        }
+
+        String extension = contentType.contains("png") ? "png" : "jpg";
+        String filename = String.format("user_%d_%d.%s", user.getId(), System.currentTimeMillis(), extension);
+        Path avatarRoot = resolveAvatarRootDir();
+        Path targetPath = avatarRoot.resolve(filename);
+
+        try {
+            Files.createDirectories(avatarRoot);
+            file.transferTo(targetPath.toFile());
+            log.info("[MockAuth] 头像已保存: {}", targetPath.toAbsolutePath());
+        } catch (IOException e) {
+            log.error("[MockAuth] 保存头像失败", e);
+            throw new BizException(500, "保存头像失败");
+        }
+
+        deleteOldAvatar(user);
+
+        String avatarUrl = String.format("http://localhost:%d/api/uploads/avatars/%s", serverPort, filename);
+        user.setAvatarSrc(avatarUrl);
+        userRepo.save(user);
+
+        opLog.log("AVATAR_UPLOAD", user.getId(), user.getUserName(), "user", String.valueOf(user.getId()), "上传头像");
+        return toProfile(user);
+    }
+
+    private void deleteOldAvatar(User user) {
+        String oldAvatarSrc = user.getAvatarSrc();
+        if (oldAvatarSrc != null && oldAvatarSrc.contains("/uploads/avatars/")) {
+            String oldFilename = oldAvatarSrc.substring(oldAvatarSrc.lastIndexOf('/') + 1);
+            Path oldPath = resolveAvatarRootDir().resolve(oldFilename);
+            try {
+                Files.deleteIfExists(oldPath);
+                log.info("[MockAuth] 已删除旧头像: {}", oldPath);
+            } catch (IOException e) {
+                log.warn("[MockAuth] 删除旧头像失败: {}", oldPath, e);
+            }
+        }
+    }
+
+    private Path resolveAvatarRootDir() {
+        String configuredDir = avatarDir;
+        if (configuredDir == null || configuredDir.isBlank()) {
+            configuredDir = "uploads/avatars";
+        }
+        return Paths.get(configuredDir).toAbsolutePath().normalize();
     }
 
     @Override

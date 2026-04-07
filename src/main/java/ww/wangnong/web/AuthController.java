@@ -6,7 +6,9 @@ import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.multipart.MultipartFile;
 
 import ww.wangnong.dto.ApiResponse;
 import ww.wangnong.service.AuthService;
@@ -81,6 +83,13 @@ public class AuthController {
     public ApiResponse<?> useFixedAvatar(
             @RequestHeader(value = "Authorization", defaultValue = "") String auth) {
         return ApiResponse.ok(authService.useFixedAvatar(extractToken(auth)));
+    }
+
+    @PostMapping("/avatar/upload")
+    public ApiResponse<?> uploadAvatar(
+            @RequestHeader(value = "Authorization", defaultValue = "") String auth,
+            @RequestParam("file") MultipartFile file) {
+        return ApiResponse.ok(authService.uploadAvatar(extractToken(auth), file));
     }
 
     @PostMapping("/logout")

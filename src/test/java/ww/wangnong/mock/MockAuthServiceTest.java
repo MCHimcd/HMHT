@@ -4,17 +4,23 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import java.io.File;
+import java.lang.reflect.Field;
 import java.time.LocalDateTime;
 import java.util.Optional;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.mock.web.MockMultipartFile;
+import org.springframework.web.multipart.MultipartFile;
 
 import ww.wangnong.entity.User;
 import ww.wangnong.entity.VerificationCode;
@@ -51,6 +57,16 @@ class MockAuthServiceTest {
         u.setUserName("测试用户");
         u.setRole("user");
         return u;
+    }
+
+    private void setPrivateField(String fieldName, Object value) {
+        try {
+            Field field = MockAuthService.class.getDeclaredField(fieldName);
+            field.setAccessible(true);
+            field.set(service, value);
+        } catch (ReflectiveOperationException ex) {
+            throw new RuntimeException(ex);
+        }
     }
 
     // ── login ──
@@ -190,5 +206,83 @@ class MockAuthServiceTest {
         User admin = service.requireAdmin(login.token());
 
         assertThat(admin.getRole()).isEqualTo("admin");
+    }
+
+    // ── uploadAvatar ──
+
+    @Test
+    void uploadAvatar_emptyFile_throwsBizException400() {
+        User user = stubUser();
+        when(userRepo.findByPhone("13800000001")).thenReturn(Optional.of(user));
+        when(userRepo.findById(1L)).thenReturn(Optional.of(user));
+
+        LoginResult login = service.login("13800000001", "password123");
+        MockMultipartFile emptyFile = new MockMultipartFile(
+                "file", "avatar.png", "image/png", new byte[0]);
+
+        assertThatThrownBy(() -> service.uploadAvatar(login.token(), emptyFile))
+                .isInstanceOf(BizException.class)
+                .extracting("code").isEqualTo(400);
+    }
+
+    @Test
+    void uploadAvatar_invalidContentType_throwsBizException400() {
+        User user = stubUser();
+        when(userRepo.findByPhone("13800000001")).thenReturn(Optional.of(user));
+        when(userRepo.findById(1L)).thenReturn(Optional.of(user));
+
+        LoginResult login = service.login("13800000001", "password123");
+        MockMultipartFile pdfFile = new MockMultipartFile(
+                "file", "document.pdf", "application/pdf", "fake-pdf".getBytes());
+
+        assertThatThrownBy(() -> service.uploadAvatar(login.token(), pdfFile))
+                .isInstanceOf(BizException.class)
+                .extracting("code").isEqualTo(400);
+    }
+
+    @Test
+    void uploadAvatar_nullFile_throwsBizException400() {
+        User user = stubUser();
+        when(userRepo.findByPhone("13800000001")).thenReturn(Optional.of(user));
+        when(userRepo.findById(1L)).thenReturn(Optional.of(user));
+
+        LoginResult login = service.login("13800000001", "password123");
+
+        assertThatThrownBy(() -> service.uploadAvatar(login.token(), null))
+                .isInstanceOf(BizException.class)
+                .extracting("code").isEqualTo(400);
+    }
+
+    @Test
+    void uploadAvatar_invalidToken_throwsBizException401() {
+        MockMultipartFile file = new MockMultipartFile(
+                "file", "avatar.png", "image/png", "fake-image".getBytes());
+
+        assertThatThrownBy(() -> service.uploadAvatar("invalid-token", file))
+                .isInstanceOf(BizException.class)
+                .extracting("code").isEqualTo(401);
+    }
+
+    @Test
+    void uploadAvatar_relativeAvatarDir_transferToUsesAbsoluteFile() throws Exception {
+        User user = stubUser();
+        when(userRepo.findByPhone("13800000001")).thenReturn(Optional.of(user));
+        when(userRepo.findById(1L)).thenReturn(Optional.of(user));
+
+        LoginResult login = service.login("13800000001", "password123");
+
+        MultipartFile file = mock(MultipartFile.class);
+        when(file.isEmpty()).thenReturn(false);
+        when(file.getContentType()).thenReturn("image/png");
+        when(file.getSize()).thenReturn(128L);
+
+        setPrivateField("avatarDir", "uploads/avatars");
+        setPrivateField("serverPort", 8080);
+
+        service.uploadAvatar(login.token(), file);
+
+        ArgumentCaptor<File> destinationCaptor = ArgumentCaptor.forClass(File.class);
+        verify(file).transferTo(destinationCaptor.capture());
+        assertThat(destinationCaptor.getValue().toPath().isAbsolute()).isTrue();
     }
 }

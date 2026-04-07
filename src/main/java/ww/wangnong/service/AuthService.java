@@ -1,5 +1,7 @@
 package ww.wangnong.service;
 
+import org.springframework.web.multipart.MultipartFile;
+
 import com.fasterxml.jackson.annotation.JsonProperty;
 
 public interface AuthService {
@@ -27,6 +29,8 @@ public interface AuthService {
     void changePassword(String token, String oldPassword, String newPassword);
 
     Profile useFixedAvatar(String token);
+
+    Profile uploadAvatar(String token, MultipartFile file);
 
     void logout(String token);
 }

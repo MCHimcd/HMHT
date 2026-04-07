@@ -174,7 +174,38 @@ powershell -ExecutionPolicy Bypass -File .\scripts\tests\start.ps1.test.ps1
 | PUT | `/v1/auth/profile` | 更新个人资料 | Bearer Token |
 | PUT | `/v1/auth/password` | 修改密码 | Bearer Token |
 | POST | `/v1/auth/avatar/use-fixed` | 使用固定头像 | Bearer Token |
+| POST | `/v1/auth/avatar/upload` | 上传头像（multipart/form-data） | Bearer Token |
 | POST | `/v1/auth/logout` | 登出 | Bearer Token |
+
+#### 头像上传接口详情
+
+**请求格式**: `multipart/form-data`
+
+| 字段 | 类型 | 必填 | 说明 |
+|------|------|------|------|
+| `file` | binary | 是 | 头像图片文件，支持 PNG/JPEG，最大 5MB |
+
+存储目录由 `hmht.upload.avatar-dir`（默认 `uploads/avatars`）控制；后端会解析为绝对路径后落盘，避免 Servlet 临时目录相对路径导致的写入失败。
+
+**成功响应**:
+```json
+{
+  "code": 200,
+  "message": "success",
+  "data": {
+    "userId": "WangNong_001",
+    "userName": "王农",
+    "gender": "男",
+    "birthDate": "1990-01-01",
+    "avatarSrc": "http://localhost:8080/api/uploads/avatars/user_1_20260407.png",
+    "role": "user"
+  }
+}
+```
+
+**错误响应**:
+- `400`: 文件为空 / 仅支持 PNG/JPEG 格式图片 / 文件大小不能超过 5MB
+- `401`: 未登录或 token 已过期
 
 ### 节点管理 — NodeController (`/v1/nodes`)
 
