@@ -5,6 +5,8 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
+import org.springframework.stereotype.Service;
+
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
@@ -17,20 +19,24 @@ import ww.wangnong.repository.CapabilitySensorRepository;
 import ww.wangnong.repository.DeviceCapabilityRepository;
 import ww.wangnong.repository.DeviceShadowRepository;
 
-public abstract class DatabaseDeviceService implements DeviceService {
+/**
+ * DeviceService 的数据库实现，所有运行模式共用。
+ */
+@Service
+public class DatabaseDeviceService implements DeviceService {
 
     private static final TypeReference<List<String>> STRING_LIST_TYPE = new TypeReference<>() {
     };
     private static final TypeReference<Map<String, Object>> MAP_TYPE = new TypeReference<>() {
     };
 
-    protected final DeviceCapabilityRepository deviceCapabilityRepository;
-    protected final CapabilitySensorRepository capabilitySensorRepository;
-    protected final CapabilityEquipmentRepository capabilityEquipmentRepository;
-    protected final DeviceShadowRepository deviceShadowRepository;
-    protected final ObjectMapper objectMapper;
+    private final DeviceCapabilityRepository deviceCapabilityRepository;
+    private final CapabilitySensorRepository capabilitySensorRepository;
+    private final CapabilityEquipmentRepository capabilityEquipmentRepository;
+    private final DeviceShadowRepository deviceShadowRepository;
+    private final ObjectMapper objectMapper;
 
-    protected DatabaseDeviceService(
+    public DatabaseDeviceService(
             DeviceCapabilityRepository deviceCapabilityRepository,
             CapabilitySensorRepository capabilitySensorRepository,
             CapabilityEquipmentRepository capabilityEquipmentRepository,

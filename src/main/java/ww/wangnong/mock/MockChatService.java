@@ -1,12 +1,15 @@
 package ww.wangnong.mock;
 
-import org.springframework.boot.autoconfigure.condition.ConditionalOnExpression;
 import org.springframework.stereotype.Service;
 
+import ww.wangnong.config.condition.ConditionalOnNoPythonRoute;
 import ww.wangnong.service.ChatService;
 
+/**
+ * ChatService 的 Mock 实现，在没有 Python 后端时使用（mock/hardware 模式）。
+ */
 @Service
-@ConditionalOnExpression("'${hmht.run.mode:mock}'.equals('mock') || '${hmht.run.mode:mock}'.equals('hardware')")
+@ConditionalOnNoPythonRoute
 public class MockChatService implements ChatService {
 
     @Override

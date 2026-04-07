@@ -5,12 +5,15 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
+import static org.mockito.Mockito.when;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
+import ww.wangnong.config.RunMode;
+import ww.wangnong.config.RunModeHolder;
 import ww.wangnong.mqtt.MqttSubscriptionRegistry;
 import ww.wangnong.mqtt.PahoMqttService;
 import ww.wangnong.service.AlertService;
@@ -42,15 +45,22 @@ class MqttBridgeTest {
     @Mock
     private ProtocolPersistenceService protocolPersistenceService;
 
+    @Mock
+    private RunModeHolder runModeHolder;
+
     @Test
     void init_bridgeMode_registersPythonRoutesOnly() {
+        when(runModeHolder.isPythonRouteEnabled()).thenReturn(true);
+        when(runModeHolder.isHardwareRouteEnabled()).thenReturn(false);
+        when(runModeHolder.getMode()).thenReturn(RunMode.BRIDGE);
+
         MqttBridge bridge = new MqttBridge(
             mqttService,
             alertService,
             influxTelemetryWriter,
             subscriptionRegistry,
             protocolPersistenceService,
-            "bridge");
+            runModeHolder);
 
         bridge.init();
 
@@ -69,13 +79,17 @@ class MqttBridgeTest {
 
     @Test
     void init_hardwareMode_registersHardwareRoutesOnly() {
+        when(runModeHolder.isPythonRouteEnabled()).thenReturn(false);
+        when(runModeHolder.isHardwareRouteEnabled()).thenReturn(true);
+        when(runModeHolder.getMode()).thenReturn(RunMode.HARDWARE);
+
         MqttBridge bridge = new MqttBridge(
             mqttService,
             alertService,
             influxTelemetryWriter,
             subscriptionRegistry,
             protocolPersistenceService,
-            "hardware");
+            runModeHolder);
 
         bridge.init();
 
@@ -94,13 +108,17 @@ class MqttBridgeTest {
 
     @Test
     void init_fullMode_registersPythonAndHardwareRoutes() {
+        when(runModeHolder.isPythonRouteEnabled()).thenReturn(true);
+        when(runModeHolder.isHardwareRouteEnabled()).thenReturn(true);
+        when(runModeHolder.getMode()).thenReturn(RunMode.FULL);
+
         MqttBridge bridge = new MqttBridge(
             mqttService,
             alertService,
             influxTelemetryWriter,
             subscriptionRegistry,
             protocolPersistenceService,
-            "full");
+            runModeHolder);
 
         bridge.init();
 

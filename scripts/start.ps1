@@ -188,39 +188,39 @@ function Read-ServiceStatus {
 
 function Stop-ProcessTreeGracefully {
     param(
-        [int]$Pid,
+        [int]$ProcessId,
         [int]$GraceSeconds = 8
     )
 
-    if ($Pid -le 0) {
+    if ($ProcessId -le 0) {
         return
     }
 
-    $proc = Get-Process -Id $Pid -ErrorAction SilentlyContinue
+    $proc = Get-Process -Id $ProcessId -ErrorAction SilentlyContinue
     if ($null -eq $proc) {
         return
     }
 
     try {
-        & taskkill /PID $Pid /T | Out-Null
+        & taskkill /PID $ProcessId /T | Out-Null
     }
     catch {
-        Write-Verbose "taskkill soft failed for PID ${Pid}: $($_.Exception.Message)"
+        Write-Verbose "taskkill soft failed for PID ${ProcessId}: $($_.Exception.Message)"
     }
 
     $deadline = (Get-Date).AddSeconds($GraceSeconds)
     while ((Get-Date) -lt $deadline) {
-        if ($null -eq (Get-Process -Id $Pid -ErrorAction SilentlyContinue)) {
+        if ($null -eq (Get-Process -Id $ProcessId -ErrorAction SilentlyContinue)) {
             return
         }
         Start-Sleep -Milliseconds 400
     }
 
     try {
-        & taskkill /PID $Pid /T /F | Out-Null
+        & taskkill /PID $ProcessId /T /F | Out-Null
     }
     catch {
-        Write-Verbose "taskkill force failed for PID ${Pid}: $($_.Exception.Message)"
+        Write-Verbose "taskkill force failed for PID ${ProcessId}: $($_.Exception.Message)"
     }
 }
 
@@ -336,6 +336,17 @@ function Try-CreateInfluxToken {
 
     try {
         $tokenOut = & $InfluxExe create token --admin --host http://127.0.0.1:8181 --format json 2>&1
+        
+        # 检查是否是 token 已存在错误
+        $errorOutput = $tokenOut | Where-Object { $_ -is [System.Management.Automation.ErrorRecord] }
+        if ($errorOutput) {
+            $errorText = $errorOutput | Out-String
+            if ($errorText -match "token name already exists") {
+                Write-Host "[*] InfluxDB admin token 已存在，跳过创建。" -ForegroundColor DarkGray
+                return "EXISTS_BUT_UNKNOWN"
+            }
+        }
+
         $tokenJson = $tokenOut | ConvertFrom-Json
 
         $token = ""
@@ -355,7 +366,12 @@ function Try-CreateInfluxToken {
         return $token
     }
     catch {
-        Write-Warning "Influx token 自动创建失败：$($_.Exception.Message)"
+        $errorMsg = $_.Exception.Message
+        if ($errorMsg -match "token name already exists") {
+            Write-Host "[*] InfluxDB admin token 已存在，跳过创建。" -ForegroundColor DarkGray
+            return "EXISTS_BUT_UNKNOWN"
+        }
+        Write-Warning "Influx token 自动创建失败：$errorMsg"
         return ""
     }
 }
@@ -500,7 +516,7 @@ function Invoke-Worker {
 
             if (-not [string]::IsNullOrWhiteSpace($StopSignalFile) -and (Test-Path $StopSignalFile)) {
                 Write-WorkerStatus -StatusFile $statusFile -Name $WorkerName -Kind $WorkerKind -State "Stopping" -ShellPid $PID -ChildPid $childProc.Id -Message "Stop signal received"
-                Stop-ProcessTreeGracefully -Pid $childProc.Id -GraceSeconds 8
+                Stop-ProcessTreeGracefully -ProcessId $childProc.Id -GraceSeconds 8
                 break
             }
 
@@ -524,7 +540,7 @@ function Invoke-Worker {
     }
     finally {
         if ($childProc -and -not $childProc.HasExited) {
-            Stop-ProcessTreeGracefully -Pid $childProc.Id -GraceSeconds 3
+            Stop-ProcessTreeGracefully -ProcessId $childProc.Id -GraceSeconds 3
         }
     }
 }
@@ -672,10 +688,10 @@ function Invoke-OrchestratorShutdown {
     foreach ($svc in $Services) {
         $st = Read-ServiceStatus -Service $svc
         if ($st.childPid -and $st.childPid -gt 0) {
-            Stop-ProcessTreeGracefully -Pid ([int]$st.childPid) -GraceSeconds 2
+            Stop-ProcessTreeGracefully -ProcessId ([int]$st.childPid) -GraceSeconds 2
         }
         if ($st.shellPid -and $st.shellPid -gt 0) {
-            Stop-ProcessTreeGracefully -Pid ([int]$st.shellPid) -GraceSeconds 2
+            Stop-ProcessTreeGracefully -ProcessId ([int]$st.shellPid) -GraceSeconds 2
         }
     }
 
@@ -689,7 +705,7 @@ function Invoke-OrchestratorShutdown {
 
         Start-Sleep -Milliseconds 800
         if (-not $WtOwnerProcess.HasExited) {
-            Stop-ProcessTreeGracefully -Pid $WtOwnerProcess.Id -GraceSeconds 2
+            Stop-ProcessTreeGracefully -ProcessId $WtOwnerProcess.Id -GraceSeconds 2
         }
     }
 
@@ -698,7 +714,7 @@ function Invoke-OrchestratorShutdown {
             $_.CommandLine -like "*$WindowName*"
         }
         foreach ($item in $wtByCmd) {
-            Stop-ProcessTreeGracefully -Pid $item.ProcessId -GraceSeconds 2
+            Stop-ProcessTreeGracefully -ProcessId $item.ProcessId -GraceSeconds 2
         }
     }
     catch {

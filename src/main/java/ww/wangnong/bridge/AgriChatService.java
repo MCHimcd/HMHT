@@ -12,7 +12,6 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnExpression;
 import org.springframework.context.annotation.Primary;
 import org.springframework.core.io.ByteArrayResource;
 import org.springframework.http.MediaType;
@@ -21,15 +20,18 @@ import org.springframework.util.LinkedMultiValueMap;
 import org.springframework.util.MultiValueMap;
 import org.springframework.web.client.RestClient;
 
+import ww.wangnong.config.condition.ConditionalOnPythonRoute;
 import ww.wangnong.service.ChatService;
 
 /**
  * Chat service implementation that proxies requests to the Python agri backend.
  * Python endpoint: POST /api/multi-conversation/chat (multipart/form-data)
+ * 
+ * 在 Python 路由启用时激活（bridge/full 模式）。
  */
 @Service
 @Primary
-@ConditionalOnExpression("'${hmht.run.mode:mock}'.equals('bridge') || '${hmht.run.mode:mock}'.equals('full')")
+@ConditionalOnPythonRoute
 public class AgriChatService implements ChatService {
 
     private static final Logger log = LoggerFactory.getLogger(AgriChatService.class);

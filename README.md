@@ -33,12 +33,17 @@ HMHT/
 │   ├── influx/                        # InfluxDB 直接写入
 │   ├── mock/                          # Mock 模式实现 & 种子数据
 │   ├── config/                        # Spring 配置类
+│   │   └── condition/                 # 运行模式条件注解
 │   └── exception/                     # 全局异常处理
 ├── src/main/resources/
 │   ├── application.properties         # 主配置文件
 │   └── db/migration/                   # Flyway 迁移（V1 初始化 + V2 协议控制面）
 ├── src/test/java/ww/wangnong/         # 测试
-├── start.ps1                          # 一键启动脚本（本地开发）
+├── scripts/
+│   ├── start.ps1                      # 一键启动脚本（本地开发）
+│   └── tests/
+│       ├── start.ps1.test.ps1         # start.ps1 的脚本级测试入口
+│       └── test-start.ps1             # start.ps1 的辅助测试套件
 ├── docs/deployment.md                 # 云部署指南
 ├── docs/backend-hardware-protocol.md  # 后端<->硬件通讯协议（V2）
 ├── docs/hardware-team-action-guide.md # 硬件成员执行指南（V2 对接）
@@ -55,6 +60,18 @@ HMHT 支持四种运行模式，通过 `hmht.run.mode` 属性（环境变量 `HM
 | **bridge** | App <-> Java <-> Python（不走硬件） | Python agri 后端 → MQTT → MqttBridge → App |
 | **hardware** | App <-> Java <-> 硬件端（不走 Python） | 硬件设备 MQTT → MqttBridge → App |
 | **full** | App <-> Java <-> Python <-> 硬件端（完整链路） | Python + 硬件双源 MQTT → MqttBridge → App |
+
+### 运行模式条件装配
+
+组件通过 `config/condition/` 包中的自定义条件注解进行条件装配：
+
+| 注解 | 激活模式 | 说明 |
+|------|----------|------|
+| `@ConditionalOnMockMode` | mock | 仅 mock 模式激活 |
+| `@ConditionalOnBridgeMode` | bridge/hardware/full | 非 mock 模式激活 |
+| `@ConditionalOnPythonRoute` | bridge/full | Python 路由启用时激活 |
+| `@ConditionalOnHardwareRoute` | hardware/full | 硬件路由启用时激活 |
+| `@ConditionalOnNoPythonRoute` | mock/hardware | 无 Python 路由时激活 |
 
 > 当前 V2 阶段能力：
 > 1) App <-> 后端 <-> 硬件链路打通（telemetry/command/ack）；
@@ -88,12 +105,22 @@ HMHT 支持四种运行模式，通过 `hmht.run.mode` 属性（环境变量 `HM
 ### 本地开发（全链路）
 
 ```powershell
-.\start.ps1 -Mode full
+.\scripts\start.ps1 -Mode full
 ```
 
 支持参数：`-Mode mock|bridge|hardware|full`、`-PythonDir`、`-JavaDir`、`-AgriChatPort`、`-InfluxDir`、`-InfluxToken`。要求已安装 Windows Terminal（`wt.exe`）。
 
-`start.ps1` 启动后会在主终端实时展示各服务状态（Starting/Running/Stopping/Stopped/Failed），并在 Ctrl+C 时执行统一停机：先优雅停止，超时后强制回收，确保标签页与子进程同步退出。
+`scripts/start.ps1` 启动后会在主终端实时展示各服务状态（Starting/Running/Stopping/Stopped/Failed），并在 Ctrl+C 时执行统一停机：先优雅停止，超时后强制回收，确保标签页与子进程同步退出。
+
+### 启动脚本测试
+
+启动脚本的脚本级校验位于 `scripts/tests/`：
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\tests\start.ps1.test.ps1
+```
+
+该测试用于验证 `scripts/start.ps1` 的语法、帮助信息、参数解析、编码和关键函数定义。
 
 ### 编译 JAR
 
@@ -110,12 +137,6 @@ HMHT 支持四种运行模式，通过 `hmht.run.mode` 属性（环境变量 `HM
 ```
 
 测试报告：`build/reports/tests/test/index.html`
-
-脚本级校验（启动脚本重构约束）：
-
-```powershell
-powershell -ExecutionPolicy Bypass -File .\scripts\tests\start.ps1.test.ps1
-```
 
 #### 测试层次结构
 
@@ -282,7 +303,7 @@ Service 接口定义在 `ww.wangnong.service`，根据运行模式由不同实�
 | `NodeService` | `MockNodeService` | — | 节点 & 传感器元数据 |
 | `AlertService` | `MockAlertService` | — | 告警查询 & 处理 |
 | `SensorService` | `MockSensorService` | `InfluxSensorService` | 传感器历史 & 设备统计 |
-| `DeviceService` | `MockDeviceService` | `BridgeDeviceService` | 设备能力 & 设备影子查询 |
+| `DeviceService` | `DatabaseDeviceService`（统一实现） | — | 设备能力 & 设备影子查询 |
 | `ChatService` | `MockChatService` | `AgriChatService` | AI 对话 |
 | `ExtraService` | `MockExtraService` | — | 溯源 & 摄像头 |
 | `AdminService` | `MockAdminService` | — | 管理员操作 |
@@ -291,20 +312,22 @@ Service 接口定义在 `ww.wangnong.service`，根据运行模式由不同实�
 
 **补充组件（非 Service 接口）：**
 
-| 类 | 包 | 说明 |
-|----|----|------|
-| `MockDataLifecycle` | `mock/` | mock 模式启动播种、关闭清理 |
-| `MockMqttSimulator` | `mock/` | mock 模式模拟 MQTT 遥测发布 |
-| `MockAlertGenerator` | `mock/` | mock 模式定时生成告警 |
-| `MockTaskExecutor` | `mock/` | mock 模式定时任务执行 |
-| `MqttBridge` | `bridge/` | Python ↔ App MQTT 双向桥接 |
-| `TelemetryTranslator` | `bridge/` | Python → App 遥测字段映射 |
-| `InfluxTelemetryWriter` | `bridge/` | 翻译后遥测写入 InfluxDB |
-| `ProtocolPersistenceService` | `bridge/` | V2 控制面持久化（命令请求、ACK、审计、死信） |
-| `CommandAckTracker` | `bridge/` | ACK 超时扫描与命令重试（bridge 模式） |
-| `InfluxTelemetryService` | `influx/` | InfluxDB 低级写入（Line Protocol） |
-| `PahoMqttService` | `mqtt/` | Eclipse Paho MQTT 客户端封装（连接生命周期快照、重连重订阅） |
-| `MqttSubscriptionRegistry` | `mqtt/` | MQTT 订阅注册占位机制，统一管理 bridge 主题处理器 |
+| 类 | 包 | 激活条件 | 说明 |
+|----|----|----------|------|
+| `RunMode` | `config/` | 始终 | 运行模式枚举定义 |
+| `RunModeHolder` | `config/` | 始终 | 运行模式持有组件 |
+| `MockDataLifecycle` | `mock/` | `@ConditionalOnMockMode` | mock 模式启动播种、关闭清理 |
+| `MockMqttSimulator` | `mock/` | `@ConditionalOnMockMode` | mock 模式模拟 MQTT 遥测发布 |
+| `MockAlertGenerator` | `mock/` | `@ConditionalOnMockMode` | mock 模式定时生成告警 |
+| `MockTaskExecutor` | `mock/` | `@ConditionalOnMockMode` | mock 模式定时任务执行 |
+| `MqttBridge` | `bridge/` | `@ConditionalOnBridgeMode` | Python ↔ App MQTT 双向桥接 |
+| `TelemetryTranslator` | `bridge/` | 静态工具 | Python → App 遥测字段映射 |
+| `InfluxTelemetryWriter` | `bridge/` | InfluxDB 启用 | 翻译后遥测写入 InfluxDB |
+| `ProtocolPersistenceService` | `bridge/` | `@ConditionalOnBridgeMode` | V2 控制面持久化（命令请求、ACK、审计、死信） |
+| `CommandAckTracker` | `bridge/` | `@ConditionalOnHardwareRoute` | ACK 超时扫描与命令重试（hardware/full 模式） |
+| `InfluxTelemetryService` | `influx/` | InfluxDB 启用 | InfluxDB 低级写入（Line Protocol） |
+| `PahoMqttService` | `mqtt/` | MQTT 启用 | Eclipse Paho MQTT 客户端封装（连接生命周期快照、重连重订阅） |
+| `MqttSubscriptionRegistry` | `mqtt/` | 始终 | MQTT 订阅注册占位机制，统一管理 bridge 主题处理器 |
 
 ## Controller 清单
 

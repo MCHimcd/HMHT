@@ -6,7 +6,6 @@ import static org.mockito.Mockito.when;
 
 import java.time.LocalDateTime;
 import java.util.List;
-import java.util.Map;
 import java.util.Optional;
 
 import org.junit.jupiter.api.BeforeEach;
@@ -24,9 +23,10 @@ import ww.wangnong.repository.CapabilityEquipmentRepository;
 import ww.wangnong.repository.CapabilitySensorRepository;
 import ww.wangnong.repository.DeviceCapabilityRepository;
 import ww.wangnong.repository.DeviceShadowRepository;
+import ww.wangnong.service.DatabaseDeviceService;
 
 @ExtendWith(MockitoExtension.class)
-class MockDeviceServiceTest {
+class DatabaseDeviceServiceTest {
 
     @Mock
     private DeviceCapabilityRepository deviceCapabilityRepository;
@@ -40,11 +40,11 @@ class MockDeviceServiceTest {
     @Mock
     private DeviceShadowRepository deviceShadowRepository;
 
-    private MockDeviceService service;
+    private DatabaseDeviceService service;
 
     @BeforeEach
     void setUp() {
-        service = new MockDeviceService(
+        service = new DatabaseDeviceService(
                 deviceCapabilityRepository,
                 capabilitySensorRepository,
                 capabilityEquipmentRepository,

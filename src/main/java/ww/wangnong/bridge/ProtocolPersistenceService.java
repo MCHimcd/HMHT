@@ -12,9 +12,9 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnExpression;
 import org.springframework.stereotype.Service;
 
+import ww.wangnong.config.condition.ConditionalOnBridgeMode;
 import ww.wangnong.entity.CommandAck;
 import ww.wangnong.entity.CommandRequest;
 import ww.wangnong.entity.CapabilityEquipment;
@@ -34,8 +34,12 @@ import ww.wangnong.repository.DeviceShadowRepository;
 import ww.wangnong.repository.IngestAuditRepository;
 import ww.wangnong.repository.IngestDeadletterRepository;
 
+/**
+ * 协议控制面持久化服务，处理命令、ACK、能力、影子等数据的持久化。
+ * 在桥接模式下激活（bridge/hardware/full）。
+ */
 @Service
-@ConditionalOnExpression("'${hmht.run.mode:mock}'.equals('bridge') || '${hmht.run.mode:mock}'.equals('hardware') || '${hmht.run.mode:mock}'.equals('full')")
+@ConditionalOnBridgeMode
 public class ProtocolPersistenceService {
 
     private static final Logger log = LoggerFactory.getLogger(ProtocolPersistenceService.class);

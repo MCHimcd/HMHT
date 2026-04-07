@@ -9,11 +9,11 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.beans.factory.annotation.Value;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnExpression;
 import org.springframework.stereotype.Component;
 
 import jakarta.annotation.PostConstruct;
+import ww.wangnong.config.RunModeHolder;
+import ww.wangnong.config.condition.ConditionalOnBridgeMode;
 import ww.wangnong.mqtt.MqttSubscriptionRegistry;
 import ww.wangnong.mqtt.PahoMqttService;
 import ww.wangnong.service.AlertService;
@@ -25,10 +25,10 @@ import ww.wangnong.service.AlertService.AlertInfo;
  * Subscribes to Python-side topics (/agri/...) and republishes translated
  * messages on App-side topics (/wangnong_2026/...), and vice versa for commands.
  *
- * Activated when hmht.run.mode is bridge/hardware/full.
+ * 在桥接模式下激活（bridge/hardware/full）。
  */
 @Component
-@ConditionalOnExpression("'${hmht.run.mode:mock}'.equals('bridge') || '${hmht.run.mode:mock}'.equals('hardware') || '${hmht.run.mode:mock}'.equals('full')")
+@ConditionalOnBridgeMode
 public class MqttBridge {
 
     private static final Logger log = LoggerFactory.getLogger(MqttBridge.class);
@@ -59,26 +59,26 @@ public class MqttBridge {
     private final InfluxTelemetryWriter influxWriter;
     private final MqttSubscriptionRegistry subscriptionRegistry;
     private final ProtocolPersistenceService protocolPersistenceService;
-    private final String runMode;
+    private final RunModeHolder runModeHolder;
 
     public MqttBridge(PahoMqttService mqtt,
             AlertService alertService,
             InfluxTelemetryWriter influxWriter,
             MqttSubscriptionRegistry subscriptionRegistry,
             ProtocolPersistenceService protocolPersistenceService,
-            @Value("${hmht.run.mode:mock}") String runMode) {
+            RunModeHolder runModeHolder) {
         this.mqtt = mqtt;
         this.alertService = alertService;
         this.influxWriter = influxWriter;
         this.subscriptionRegistry = subscriptionRegistry;
         this.protocolPersistenceService = protocolPersistenceService;
-        this.runMode = runMode;
+        this.runModeHolder = runModeHolder;
     }
 
     @PostConstruct
     public void init() {
-        final boolean enablePythonRoute = isPythonRouteEnabled();
-        final boolean enableHardwareRoute = isHardwareRouteEnabled();
+        final boolean enablePythonRoute = runModeHolder.isPythonRouteEnabled();
+        final boolean enableHardwareRoute = runModeHolder.isHardwareRouteEnabled();
 
         if (enablePythonRoute) {
             // 1) Python telemetry → translate → App telemetry + InfluxDB
@@ -348,17 +348,9 @@ public class MqttBridge {
         subscriptionRegistry.bindAll(mqtt);
 
         log.info("[Bridge] MQTT Bridge initialized: mode={}, pythonRoute={}, hardwareRoute={}",
-                runMode,
+                runModeHolder.getMode(),
                 enablePythonRoute,
                 enableHardwareRoute);
-    }
-
-    private boolean isPythonRouteEnabled() {
-        return "bridge".equals(runMode) || "full".equals(runMode);
-    }
-
-    private boolean isHardwareRouteEnabled() {
-        return "hardware".equals(runMode) || "full".equals(runMode);
     }
 
     private void forwardTelemetry(String sourceTopic, Map<String, Object> appPayload) throws Exception {
