@@ -34,6 +34,18 @@ public class MockXxxService implements XxxService {
 }
 ```
 
+### 运行模式条件注解
+
+| 注解 | 激活模式 |
+|------|----------|
+| `@ConditionalOnMockMode` | mock |
+| `@ConditionalOnBridgeMode` | bridge/hardware/full |
+| `@ConditionalOnPythonRoute` | bridge/full |
+| `@ConditionalOnHardwareRoute` | hardware/full |
+| `@ConditionalOnNoPythonRoute` | mock/hardware |
+
+注解定义在 `config/condition/` 包。**不要使用旧的 SpEL 表达式**。
+
 ## Lombok 约定
 
 | 场景 | 注解 |
@@ -41,14 +53,9 @@ public class MockXxxService implements XxxService {
 | Entity | `@Getter @Setter`（不用 `@Data`） |
 | DTO | Java record（优先） |
 
-## Repository 约定
+## Entity & Repository
 
-```java
-public interface XxxRepository extends JpaRepository<Xxx, Long> {
-    Optional<Xxx> findByXxxId(String xxxId);
-    List<Xxx> findByNodeId(String nodeId);
-}
-```
+Entity 和 Repository 编写约定见 `database.instructions.md`。
 
 ## REST API 约定
 

@@ -17,6 +17,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 
 @ExtendWith(MockitoExtension.class)
 class InfluxTelemetryWriterTest {
@@ -48,13 +49,13 @@ class InfluxTelemetryWriterTest {
 
         List<String> lines = lineCaptor.getAllValues();
         assertThat(lines).anyMatch(line -> line.contains("telemetry_metric,node=N01")
-            && line.contains("metric=temperature")
-            && line.contains("value=25.3"));
+                && line.contains("metric=temperature")
+                && line.contains("value=25.3"));
         assertThat(lines).anyMatch(line -> line.contains("telemetry_metric,node=N01")
-            && line.contains("metric=humidity")
-            && line.contains("value=61.2"));
+                && line.contains("metric=humidity")
+                && line.contains("value=61.2"));
         assertThat(lines).anyMatch(line -> line.contains("equipment_state,node=N01,equipment=water_pump")
-            && line.contains("status=\"on\""));
+                && line.contains("status=\"on\""));
     }
 
     @Test
@@ -73,5 +74,10 @@ class InfluxTelemetryWriterTest {
     void writeTelemetry_nullClient_returnsWithoutError() {
         InfluxTelemetryWriter writer = new InfluxTelemetryWriter(null);
         writer.writeTelemetry("N01", Map.of("data", Map.of()));
+    }
+
+    @Test
+    void writerBean_shouldNotDependOnInfluxEnabledProperty() {
+        assertThat(InfluxTelemetryWriter.class.getAnnotation(ConditionalOnProperty.class)).isNull();
     }
 }

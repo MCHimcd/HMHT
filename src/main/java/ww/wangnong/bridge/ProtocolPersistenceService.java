@@ -44,7 +44,8 @@ public class ProtocolPersistenceService {
 
     private static final Logger log = LoggerFactory.getLogger(ProtocolPersistenceService.class);
     private static final ObjectMapper MAPPER = new ObjectMapper();
-    private static final TypeReference<Map<String, Object>> MAP_TYPE = new TypeReference<>() {};
+    private static final TypeReference<Map<String, Object>> MAP_TYPE = new TypeReference<>() {
+    };
 
     private final CommandRequestRepository commandRequestRepository;
     private final CommandAckRepository commandAckRepository;
@@ -104,6 +105,22 @@ public class ProtocolPersistenceService {
             commandRequestRepository.save(request);
         } catch (Exception e) {
             log.warn("[ProtocolPersistence] Failed to persist command request: commandId={}", commandId, e);
+        }
+    }
+
+    public void recordTelemetryHeartbeat(String deviceId, Long telemetryAtMs) {
+        if (deviceId == null || deviceId.isBlank()) {
+            return;
+        }
+
+        try {
+            DeviceProfile profile = deviceProfileRepository.findByDeviceId(deviceId).orElseGet(DeviceProfile::new);
+            profile.setDeviceId(deviceId);
+            profile.setOnline(true);
+            profile.setLastSeenAt(toDateTime(telemetryAtMs));
+            deviceProfileRepository.save(profile);
+        } catch (Exception e) {
+            log.warn("[ProtocolPersistence] Failed to persist telemetry heartbeat: deviceId={}", deviceId, e);
         }
     }
 
@@ -227,7 +244,8 @@ public class ProtocolPersistenceService {
                 Object raw = entry.getValue();
                 if (raw instanceof Map<?, ?> detailMap) {
                     Map<String, Object> detail = (Map<String, Object>) detailMap;
-                    sensor.setDataType(defaultIfBlank(str(detail.get("data_type")), inferDataType(detail.get("value"))));
+                    sensor.setDataType(
+                            defaultIfBlank(str(detail.get("data_type")), inferDataType(detail.get("value"))));
                     sensor.setUnit(str(detail.get("unit")));
                     sensor.setMinValue(toDouble(firstNonNull(detail.get("min"), detail.get("min_value"))));
                     sensor.setMaxValue(toDouble(firstNonNull(detail.get("max"), detail.get("max_value"))));

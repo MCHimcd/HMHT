@@ -329,7 +329,11 @@ function Try-CreateInfluxToken {
     )
 
     if (-not [string]::IsNullOrWhiteSpace($CurrentToken)) {
-        return $CurrentToken
+        return [pscustomobject]@{
+            token = $CurrentToken
+            alreadyExists = $false
+            errorMessage = ""
+        }
     }
 
     Write-Host "[*] 正在尝试创建 InfluxDB admin token..." -ForegroundColor DarkGray
@@ -337,17 +341,19 @@ function Try-CreateInfluxToken {
     try {
         $tokenOut = & $InfluxExe create token --admin --host http://127.0.0.1:8181 --format json 2>&1
         
-        # 检查是否是 token 已存在错误
-        $errorOutput = $tokenOut | Where-Object { $_ -is [System.Management.Automation.ErrorRecord] }
-        if ($errorOutput) {
-            $errorText = $errorOutput | Out-String
-            if ($errorText -match "token name already exists") {
-                Write-Host "[*] InfluxDB admin token 已存在，跳过创建。" -ForegroundColor DarkGray
-                return "EXISTS_BUT_UNKNOWN"
+        # 将全部输出合并为字符串，统一检测错误（stdout/stderr 均覆盖）
+        $rawText = ($tokenOut | Out-String).Trim()
+
+        if ($rawText -match "token name already exists") {
+            Write-Host "[*] InfluxDB admin token 已存在，跳过创建。" -ForegroundColor DarkGray
+            return [pscustomobject]@{
+                token = ""
+                alreadyExists = $true
+                errorMessage = "token name already exists"
             }
         }
 
-        $tokenJson = $tokenOut | ConvertFrom-Json
+        $tokenJson = $rawText | ConvertFrom-Json
 
         $token = ""
         if ($tokenJson.raw_token) {
@@ -359,20 +365,36 @@ function Try-CreateInfluxToken {
 
         if ([string]::IsNullOrWhiteSpace($token)) {
             Write-Warning "Influx token 创建结果为空，请手动传入 -InfluxToken。"
-            return ""
+            return [pscustomobject]@{
+                token = ""
+                alreadyExists = $false
+                errorMessage = "empty token response"
+            }
         }
 
         Write-Host "[*] InfluxDB token 获取成功。" -ForegroundColor Green
-        return $token
+        return [pscustomobject]@{
+            token = $token
+            alreadyExists = $false
+            errorMessage = ""
+        }
     }
     catch {
         $errorMsg = $_.Exception.Message
         if ($errorMsg -match "token name already exists") {
             Write-Host "[*] InfluxDB admin token 已存在，跳过创建。" -ForegroundColor DarkGray
-            return "EXISTS_BUT_UNKNOWN"
+            return [pscustomobject]@{
+                token = ""
+                alreadyExists = $true
+                errorMessage = "token name already exists"
+            }
         }
         Write-Warning "Influx token 自动创建失败：$errorMsg"
-        return ""
+        return [pscustomobject]@{
+            token = ""
+            alreadyExists = $false
+            errorMessage = $errorMsg
+        }
     }
 }
 
@@ -405,8 +427,14 @@ function Resolve-InfluxToken {
         try {
             $cachedToken = (Get-Content -Path $tokenFile -Raw -Encoding UTF8).Trim()
             if (-not [string]::IsNullOrWhiteSpace($cachedToken)) {
+                if ($cachedToken -eq "EXISTS_BUT_UNKNOWN") {
+                    Write-Warning "检测到历史无效 Influx token 占位值，已忽略缓存并尝试重新解析。"
+                    Remove-Item -Path $tokenFile -Force -ErrorAction SilentlyContinue
+                }
+                else {
                 Write-Host "[*] 使用已缓存的 InfluxDB token。" -ForegroundColor DarkGray
                 return $cachedToken
+                }
             }
         }
         catch {
@@ -415,7 +443,13 @@ function Resolve-InfluxToken {
     }
 
     for ($attempt = 1; $attempt -le $MaxAttempts; $attempt++) {
-        $created = Try-CreateInfluxToken -InfluxExe $InfluxExe -CurrentToken ""
+        $createResult = Try-CreateInfluxToken -InfluxExe $InfluxExe -CurrentToken ""
+        if ($createResult.alreadyExists) {
+            Write-Warning "InfluxDB 已存在管理员 token，但当前无法自动恢复。请通过 -InfluxToken 传入已有 token，或删除 Influx 数据目录后重建。"
+            return ""
+        }
+
+        $created = [string]$createResult.token
         if (-not [string]::IsNullOrWhiteSpace($created)) {
             try {
                 if (-not (Test-Path $tokenDir)) {
@@ -489,6 +523,10 @@ function Invoke-Worker {
                 if (-not [string]::IsNullOrWhiteSpace($WorkerInfluxToken)) {
                     $env:HMHT_INFLUXDB_ENABLED = "true"
                     $env:HMHT_INFLUXDB_TOKEN = $WorkerInfluxToken
+                }
+                else {
+                    $env:HMHT_INFLUXDB_ENABLED = "false"
+                    Remove-Item Env:HMHT_INFLUXDB_TOKEN -ErrorAction SilentlyContinue
                 }
 
                 $env:JAVA_TOOL_OPTIONS = "-Dfile.encoding=UTF-8 -Dsun.stdout.encoding=UTF-8 -Dsun.stderr.encoding=UTF-8"
@@ -620,6 +658,17 @@ if ($services.Count -eq 0) {
     throw "No services to start."
 }
 
+# 预防：若无缓存 token，清理 InfluxDB 数据目录以避免 "token name already exists" 冲突
+if ((Test-Path $influxExe) -and [string]::IsNullOrWhiteSpace($InfluxToken)) {
+    $influxDataDir = Join-Path $InfluxDir "data"
+    $influxTokenCache = Join-Path $influxDataDir "hmht-admin.token"
+    if (-not (Test-Path $influxTokenCache) -and (Test-Path $influxDataDir)) {
+        Write-Warning "未找到 InfluxDB token 缓存但数据目录已存在，清理数据目录以避免 token 冲突..."
+        Remove-Item -Path $influxDataDir -Recurse -Force -ErrorAction SilentlyContinue
+        Write-Host "[*] InfluxDB 数据目录已清理，启动时将重建。" -ForegroundColor DarkGray
+    }
+}
+
 Write-Banner "启动服务: 单窗口多标签"
 Write-Host "Mode: $Mode" -ForegroundColor DarkGray
 Write-Host "WT window: $windowName" -ForegroundColor DarkGray
@@ -639,7 +688,7 @@ foreach ($svc in $services) {
         Start-Sleep -Seconds 3
         $InfluxToken = Resolve-InfluxToken -InfluxExe $influxExe -InfluxDir $InfluxDir -CurrentToken $InfluxToken
         if ([string]::IsNullOrWhiteSpace($InfluxToken)) {
-            Write-Warning "未获取到 InfluxDB token，后续时序写入可能返回 401（不影响 MQTT 转发）。可通过 -InfluxToken 显式传入。"
+            Write-Warning "未获取到 InfluxDB token，Java Worker 将禁用 Influx 集成（MQTT 转发不受影响）。可通过 -InfluxToken 显式传入以启用。"
         }
     }
 

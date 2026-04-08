@@ -1,5 +1,5 @@
 ---
-description: "MQTT 桥接层约定 - 主题契约、条件装配、修改须知"
+description: "MQTT 桥接层约定 - 主题契约、条件装配、遥测映射、修改须知"
 applyTo: "src/main/java/ww/wangnong/mqtt/**/*.java,src/main/java/ww/wangnong/bridge/**/*.java"
 ---
 
@@ -7,11 +7,15 @@ applyTo: "src/main/java/ww/wangnong/mqtt/**/*.java,src/main/java/ww/wangnong/bri
 
 ## 条件装配
 
-- `MqttBridge` — `@ConditionalOnBridgeMode`（bridge/hardware/full）
-- `ProtocolPersistenceService` — `@ConditionalOnBridgeMode`
-- `CommandAckTracker` — `@ConditionalOnHardwareRoute`（hardware/full）
-- `AgriChatService` — `@ConditionalOnPythonRoute`（bridge/full）
-- `MockChatService` — `@ConditionalOnNoPythonRoute`（mock/hardware）
+桥接相关组件按运行模式激活（条件注解详见 `java.instructions.md`）：
+
+| 组件 | 条件注解 |
+|------|----------|
+| `MqttBridge` | `@ConditionalOnBridgeMode` |
+| `ProtocolPersistenceService` | `@ConditionalOnBridgeMode` |
+| `CommandAckTracker` | `@ConditionalOnHardwareRoute` |
+| `AgriChatService` | `@ConditionalOnPythonRoute` |
+| `MockChatService` | `@ConditionalOnNoPythonRoute` |
 
 ## 主题契约
 
@@ -35,6 +39,25 @@ applyTo: "src/main/java/ww/wangnong/mqtt/**/*.java,src/main/java/ww/wangnong/bri
 | `/agri/device/{deviceId}/command` | Python | 控制命令 |
 | `/hmht/device/{deviceId}/command` | 硬件 | V2 控制命令 |
 | `/wangnong_2026/node/{nodeId}/ack` | App | 硬件回执 |
+
+## 遥测字段映射（TelemetryTranslator）
+
+`pyToApp()` 将 Python 字段名翻译为 App 端字段名：
+
+| Python 字段 | App 字段 |
+|-------------|----------|
+| `air_temp` | `temperature` |
+| `air_humidity` | `humidity` |
+| `soil_temp` | `soilTemp` |
+| `soil_moisture` | `soilHumidity` |
+| `soil_ph` | `soilPh` |
+| `light_intensity` | `light` |
+| `co2_ppm` | `co2` |
+| `soil_n` | `soilN` |
+| `soil_p` | `soilP` |
+| `soil_k` | `soilK` |
+
+`hardwareV2ToApp()` 规范化硬件 V2 遥测（动态 key 透传）。
 
 ## PahoMqttService 规则
 

@@ -23,6 +23,7 @@ import ww.wangnong.entity.CommandRequest;
 import ww.wangnong.entity.CapabilityEquipment;
 import ww.wangnong.entity.CapabilitySensor;
 import ww.wangnong.entity.DeviceShadow;
+import ww.wangnong.entity.DeviceProfile;
 import ww.wangnong.entity.IngestDeadletter;
 import ww.wangnong.repository.CapabilityEquipmentRepository;
 import ww.wangnong.repository.CapabilitySensorRepository;
@@ -78,8 +79,7 @@ class ProtocolPersistenceServiceTest {
                 5000,
                 "/wangnong_2026/node/A03_Node_01/command",
                 "/hmht/device/A03_Node_01/command",
-                "{\"payload\":{}}"
-        );
+                "{\"payload\":{}}");
 
         ArgumentCaptor<CommandRequest> captor = ArgumentCaptor.forClass(CommandRequest.class);
         verify(commandRequestRepository).save(captor.capture());
@@ -113,8 +113,7 @@ class ProtocolPersistenceServiceTest {
                 ackedAtMs,
                 "{\"payload\":{}}",
                 "/hmht/device/A03_Node_01/ack",
-                "trace-2"
-        );
+                "trace-2");
 
         ArgumentCaptor<CommandAck> ackCaptor = ArgumentCaptor.forClass(CommandAck.class);
         verify(commandAckRepository).save(ackCaptor.capture());
@@ -129,7 +128,8 @@ class ProtocolPersistenceServiceTest {
         assertThat(shadowCaptor.getValue().getDeviceId()).isEqualTo("A03_Node_01");
         assertThat(shadowCaptor.getValue().getShadowJson()).contains("CMD-0002");
 
-        LocalDateTime expectedAckedAt = LocalDateTime.ofInstant(Instant.ofEpochMilli(ackedAtMs), ZoneId.systemDefault());
+        LocalDateTime expectedAckedAt = LocalDateTime.ofInstant(Instant.ofEpochMilli(ackedAtMs),
+                ZoneId.systemDefault());
         assertThat(request.getStatus()).isEqualTo("executed");
         assertThat(request.getAckedAt()).isEqualTo(expectedAckedAt);
     }
@@ -142,8 +142,7 @@ class ProtocolPersistenceServiceTest {
                 "telemetry",
                 "invalid payload",
                 "{bad-json}",
-                "trace-3"
-        );
+                "trace-3");
 
         ArgumentCaptor<IngestDeadletter> captor = ArgumentCaptor.forClass(IngestDeadletter.class);
         verify(ingestDeadletterRepository).save(captor.capture());
@@ -167,8 +166,7 @@ class ProtocolPersistenceServiceTest {
                 1765000111200L,
                 "/hmht/device/A03_Node_01/capability",
                 "{\"payload\":{}}",
-                "trace-4"
-        );
+                "trace-4");
 
         verify(deviceProfileRepository).save(any());
         verify(deviceCapabilityRepository).save(any());
@@ -180,5 +178,22 @@ class ProtocolPersistenceServiceTest {
         ArgumentCaptor<CapabilityEquipment> equipmentCaptor = ArgumentCaptor.forClass(CapabilityEquipment.class);
         verify(capabilityEquipmentRepository).save(equipmentCaptor.capture());
         assertThat(equipmentCaptor.getValue().getEquipmentKey()).isEqualTo("water_pump");
+    }
+
+    @Test
+    void recordTelemetryHeartbeat_updatesDeviceProfileOnlineAndLastSeen() {
+        long telemetryAtMs = 1765000111200L;
+        when(deviceProfileRepository.findByDeviceId("A03_Node_01")).thenReturn(Optional.empty());
+
+        service.recordTelemetryHeartbeat("A03_Node_01", telemetryAtMs);
+
+        ArgumentCaptor<DeviceProfile> profileCaptor = ArgumentCaptor.forClass(DeviceProfile.class);
+        verify(deviceProfileRepository).save(profileCaptor.capture());
+
+        DeviceProfile saved = profileCaptor.getValue();
+        assertThat(saved.getDeviceId()).isEqualTo("A03_Node_01");
+        assertThat(saved.getOnline()).isTrue();
+        assertThat(saved.getLastSeenAt())
+                .isEqualTo(LocalDateTime.ofInstant(Instant.ofEpochMilli(telemetryAtMs), ZoneId.systemDefault()));
     }
 }

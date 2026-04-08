@@ -1,5 +1,6 @@
 package ww.wangnong.bridge;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
@@ -7,10 +8,15 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
+import java.util.function.Consumer;
+
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.boot.test.system.CapturedOutput;
+import org.springframework.boot.test.system.OutputCaptureExtension;
 
 import ww.wangnong.config.RunMode;
 import ww.wangnong.config.RunModeHolder;
@@ -18,7 +24,7 @@ import ww.wangnong.mqtt.MqttSubscriptionRegistry;
 import ww.wangnong.mqtt.PahoMqttService;
 import ww.wangnong.service.AlertService;
 
-@ExtendWith(MockitoExtension.class)
+@ExtendWith({ MockitoExtension.class, OutputCaptureExtension.class })
 class MqttBridgeTest {
 
     private static final int BRIDGE_QOS = 1;
@@ -55,12 +61,12 @@ class MqttBridgeTest {
         when(runModeHolder.getMode()).thenReturn(RunMode.BRIDGE);
 
         MqttBridge bridge = new MqttBridge(
-            mqttService,
-            alertService,
-            influxTelemetryWriter,
-            subscriptionRegistry,
-            protocolPersistenceService,
-            runModeHolder);
+                mqttService,
+                alertService,
+                influxTelemetryWriter,
+                subscriptionRegistry,
+                protocolPersistenceService,
+                runModeHolder);
 
         bridge.init();
 
@@ -84,12 +90,12 @@ class MqttBridgeTest {
         when(runModeHolder.getMode()).thenReturn(RunMode.HARDWARE);
 
         MqttBridge bridge = new MqttBridge(
-            mqttService,
-            alertService,
-            influxTelemetryWriter,
-            subscriptionRegistry,
-            protocolPersistenceService,
-            runModeHolder);
+                mqttService,
+                alertService,
+                influxTelemetryWriter,
+                subscriptionRegistry,
+                protocolPersistenceService,
+                runModeHolder);
 
         bridge.init();
 
@@ -113,12 +119,12 @@ class MqttBridgeTest {
         when(runModeHolder.getMode()).thenReturn(RunMode.FULL);
 
         MqttBridge bridge = new MqttBridge(
-            mqttService,
-            alertService,
-            influxTelemetryWriter,
-            subscriptionRegistry,
-            protocolPersistenceService,
-            runModeHolder);
+                mqttService,
+                alertService,
+                influxTelemetryWriter,
+                subscriptionRegistry,
+                protocolPersistenceService,
+                runModeHolder);
 
         bridge.init();
 
@@ -132,5 +138,58 @@ class MqttBridgeTest {
 
         verify(subscriptionRegistry).bindAll(mqttService);
         verifyNoInteractions(alertService, influxTelemetryWriter, protocolPersistenceService);
+    }
+
+    @Test
+    void hardwareInboundMessages_allKinds_logsRawMqttEnvelope(CapturedOutput output) {
+        when(runModeHolder.isPythonRouteEnabled()).thenReturn(false);
+        when(runModeHolder.isHardwareRouteEnabled()).thenReturn(true);
+        when(runModeHolder.getMode()).thenReturn(RunMode.HARDWARE);
+
+        MqttBridge bridge = new MqttBridge(
+                mqttService,
+                alertService,
+                influxTelemetryWriter,
+                subscriptionRegistry,
+                protocolPersistenceService,
+                runModeHolder);
+
+        bridge.init();
+
+        Consumer<PahoMqttService.InboundMessage> telemetryHandler = captureHandler(HW_TELEMETRY);
+        Consumer<PahoMqttService.InboundMessage> capabilityHandler = captureHandler(HW_CAPABILITY);
+        Consumer<PahoMqttService.InboundMessage> ackHandler = captureHandler(HW_ACK);
+
+        telemetryHandler.accept(new PahoMqttService.InboundMessage(
+                "/hmht/device/N01/telemetry",
+                "{\"device_id\":\"N01\",\"protocol_version\":\"2.0\",\"trace_id\":\"trace-tel\",\"timestamp\":1765000111200,\"payload\":{\"sensors\":{\"air_temp\":{\"value\":25.5}},\"equipments\":{\"water_pump\":{\"state\":true}},\"mode\":\"auto\"}}",
+                1,
+                false));
+
+        capabilityHandler.accept(new PahoMqttService.InboundMessage(
+                "/hmht/device/N01/capability",
+                "{\"device_id\":\"N01\",\"protocol_version\":\"2.0\",\"trace_id\":\"trace-cap\",\"timestamp\":1765000111200,\"payload\":{\"capability_version\":\"2.0\",\"sensors\":{},\"equipments\":{}}}",
+                1,
+                false));
+
+        ackHandler.accept(new PahoMqttService.InboundMessage(
+                "/hmht/device/N01/ack",
+                "{\"device_id\":\"N01\",\"protocol_version\":\"2.0\",\"trace_id\":\"trace-ack\",\"payload\":{\"command_id\":\"CMD-1\",\"status\":\"executed\",\"ack_code\":0,\"ack_message\":\"ok\",\"acked_at\":1765000111200}}",
+                1,
+                false));
+
+        assertThat(output.getAll()).contains("[Bridge][HW-IN]");
+        assertThat(output.getAll()).contains("/hmht/device/N01/telemetry");
+        assertThat(output.getAll()).contains("/hmht/device/N01/capability");
+        assertThat(output.getAll()).contains("/hmht/device/N01/ack");
+        assertThat(output.getAll()).contains("qos=1");
+        assertThat(output.getAll()).contains("retained=false");
+    }
+
+    @SuppressWarnings({ "rawtypes", "unchecked" })
+    private Consumer<PahoMqttService.InboundMessage> captureHandler(String topicFilter) {
+        ArgumentCaptor<Consumer> captor = ArgumentCaptor.forClass(Consumer.class);
+        verify(subscriptionRegistry).register(eq(topicFilter), eq(BRIDGE_QOS), captor.capture());
+        return (Consumer<PahoMqttService.InboundMessage>) captor.getValue();
     }
 }

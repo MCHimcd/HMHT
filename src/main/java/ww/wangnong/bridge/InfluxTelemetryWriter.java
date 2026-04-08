@@ -8,7 +8,6 @@ import com.influxdb.v3.client.write.WritePrecision;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.lang.Nullable;
 import org.springframework.stereotype.Component;
 
@@ -16,7 +15,6 @@ import org.springframework.stereotype.Component;
  * Writes translated telemetry data to InfluxDB.
  */
 @Component
-@ConditionalOnProperty(prefix = "hmht.influxdb", name = "enabled", havingValue = "true")
 public class InfluxTelemetryWriter {
 
     private static final Logger log = LoggerFactory.getLogger(InfluxTelemetryWriter.class);
@@ -40,7 +38,8 @@ public class InfluxTelemetryWriter {
         try {
             WriteOptions opts = new WriteOptions(null, WritePrecision.MS, null);
 
-            // Dual-write for compatibility: keep legacy environment measurement and write the
+            // Dual-write for compatibility: keep legacy environment measurement and write
+            // the
             // dynamic metric measurement for new queries.
             StringBuilder envLine = new StringBuilder("environment,node=").append(escape(nodeId)).append(' ');
             Map<String, Object> envData = TelemetryTranslator.extractEnvironment(appPayload);

@@ -84,5 +84,6 @@ V2 控制面常见查询模式：
 1. 创建 Flyway 迁移脚本 `V{N}__{description}.sql`
 2. 创建 JPA Entity 类（`entity/` 包）
 3. 创建 Repository 接口（`repository/` 包）
-4. 如 mock 模式需要种子数据，更新 `MockDataLifecycle`
-5. 更新 README.md「数据模型清单」
+4. 编写 Repository 测试（测试规范见 `java.instructions.md`）
+5. 如 mock 模式需要种子数据，更新 `MockDataLifecycle`
+6. 更新 README.md「数据模型清单」

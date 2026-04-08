@@ -23,7 +23,8 @@ import ww.wangnong.service.AlertService.AlertInfo;
  * MQTT topic bridge between Python (agri) and App (wangnong).
  *
  * Subscribes to Python-side topics (/agri/...) and republishes translated
- * messages on App-side topics (/wangnong_2026/...), and vice versa for commands.
+ * messages on App-side topics (/wangnong_2026/...), and vice versa for
+ * commands.
  *
  * 在桥接模式下激活（bridge/hardware/full）。
  */
@@ -33,7 +34,8 @@ public class MqttBridge {
 
     private static final Logger log = LoggerFactory.getLogger(MqttBridge.class);
     private static final ObjectMapper MAPPER = new ObjectMapper();
-    private static final TypeReference<Map<String, Object>> MAP_TYPE = new TypeReference<>() {};
+    private static final TypeReference<Map<String, Object>> MAP_TYPE = new TypeReference<>() {
+    };
 
     // Python-side topic patterns
     private static final String PY_TELEMETRY = "/agri/device/+/telemetry";
@@ -135,6 +137,11 @@ public class MqttBridge {
         if (enableHardwareRoute) {
             // 1.1) Hardware V2 telemetry → normalize → App telemetry + InfluxDB
             subscriptionRegistry.register(HW_TELEMETRY, BRIDGE_QOS, msg -> {
+                log.info("[Bridge][HW-IN] topic={}, qos={}, retained={}, payload={}",
+                        msg.topic(),
+                        msg.qos(),
+                        msg.retained(),
+                        msg.payload());
                 try {
                     Map<String, Object> hwPayload = MAPPER.readValue(msg.payload(), MAP_TYPE);
                     String topicDeviceId = extractDeviceId(msg.topic(), HW_TOPIC_PREFIX);
@@ -142,6 +149,10 @@ public class MqttBridge {
                             && !topicDeviceId.isBlank()) {
                         hwPayload.put("device_id", topicDeviceId);
                     }
+
+                    protocolPersistenceService.recordTelemetryHeartbeat(
+                            str(hwPayload.get("device_id")),
+                            toLong(hwPayload.get("timestamp")));
 
                     Map<String, Object> appPayload = TelemetryTranslator.hardwareV2ToApp(hwPayload);
                     forwardTelemetry(msg.topic(), appPayload);
@@ -168,6 +179,11 @@ public class MqttBridge {
 
             // 1.2) Hardware capability declaration → control-plane persistence
             subscriptionRegistry.register(HW_CAPABILITY, BRIDGE_QOS, msg -> {
+                log.info("[Bridge][HW-IN] topic={}, qos={}, retained={}, payload={}",
+                        msg.topic(),
+                        msg.qos(),
+                        msg.retained(),
+                        msg.payload());
                 try {
                     Map<String, Object> capabilityPayload = MAPPER.readValue(msg.payload(), MAP_TYPE);
                     String topicDeviceId = extractDeviceId(msg.topic(), HW_TOPIC_PREFIX);
@@ -191,7 +207,8 @@ public class MqttBridge {
                             str(payload.get("capability_version")),
                             str(capabilityPayload.get("protocol_version")),
                             "2.0");
-                    String checksum = firstNonBlank(str(payload.get("checksum")), str(capabilityPayload.get("checksum")));
+                    String checksum = firstNonBlank(str(payload.get("checksum")),
+                            str(capabilityPayload.get("checksum")));
                     Long timestamp = toLong(capabilityPayload.get("timestamp"));
                     String traceId = firstNonBlank(
                             str(capabilityPayload.get("trace_id")),
@@ -221,6 +238,11 @@ public class MqttBridge {
 
             // 4.1) Hardware ACK → relay to App ACK topic + log
             subscriptionRegistry.register(HW_ACK, BRIDGE_QOS, msg -> {
+                log.info("[Bridge][HW-IN] topic={}, qos={}, retained={}, payload={}",
+                        msg.topic(),
+                        msg.qos(),
+                        msg.retained(),
+                        msg.payload());
                 try {
                     Map<String, Object> ackPayload = MAPPER.readValue(msg.payload(), MAP_TYPE);
                     @SuppressWarnings("unchecked")
@@ -285,7 +307,8 @@ public class MqttBridge {
                 String topic = msg.topic();
                 String[] parts = topic.split("/");
                 // parts: ["", "wangnong_2026", "node", "{nodeId}", "command"]
-                if (parts.length < 5) return;
+                if (parts.length < 5)
+                    return;
                 String deviceId = parts[3];
 
                 String pyTopic = PY_TOPIC_PREFIX + deviceId + "/command";
@@ -377,7 +400,8 @@ public class MqttBridge {
                 command.putIfAbsent("timestamp", System.currentTimeMillis());
                 command.putIfAbsent("trace_id", UUID.randomUUID().toString());
                 Map<String, Object> payload = (Map<String, Object>) command.get("payload");
-                String commandId = firstNonBlank(str(payload.get("command_id")), "CMD-" + UUID.randomUUID().toString().substring(0, 8));
+                String commandId = firstNonBlank(str(payload.get("command_id")),
+                        "CMD-" + UUID.randomUUID().toString().substring(0, 8));
                 payload.put("command_id", commandId);
                 String targetKey = firstNonBlank(str(payload.get("target_key")), "unknown");
                 String action = firstNonBlank(str(payload.get("action")), "noop");
@@ -405,9 +429,9 @@ public class MqttBridge {
                     str(command.get("action")),
                     str(command.get("command")));
 
-                    String commandId = "CMD-" + UUID.randomUUID().toString().substring(0, 8);
+            String commandId = "CMD-" + UUID.randomUUID().toString().substring(0, 8);
             Map<String, Object> commandPayload = new LinkedHashMap<>();
-                    commandPayload.put("command_id", commandId);
+            commandPayload.put("command_id", commandId);
             commandPayload.put("target_key", targetKey.isBlank() ? "unknown" : targetKey);
             commandPayload.put("action", actionName.isBlank() ? "noop" : actionName);
 
