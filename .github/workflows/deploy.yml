@@ -81,6 +81,15 @@ jobs:
             "${{ steps.find_jar.outputs.jar_file }}" \
             "${{ secrets.SERVER_USER }}@${{ secrets.SERVER_HOST }}:${{ secrets.APP_DIR }}/app.jar"
 
+      - name: Force prod Spring profile in systemd
+        run: |
+          ssh -p "${{ secrets.SERVER_PORT }}" \
+            "${{ secrets.SERVER_USER }}@${{ secrets.SERVER_HOST }}" \
+            "sudo mkdir -p '/etc/systemd/system/${{ secrets.SYSTEMD_SERVICE_NAME }}.d' && \
+             printf '[Service]\nEnvironment=\"SPRING_PROFILES_ACTIVE=prod\"\n' | \
+             sudo tee '/etc/systemd/system/${{ secrets.SYSTEMD_SERVICE_NAME }}.d/override.conf' > /dev/null && \
+             sudo systemctl daemon-reload"
+
       - name: Restart app service and show status
         run: |
           ssh -p "${{ secrets.SERVER_PORT }}" \

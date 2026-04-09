@@ -14,6 +14,7 @@ import org.springframework.stereotype.Component;
 
 import ww.wangnong.mqtt.PahoMqttService;
 import ww.wangnong.repository.AlertRepository;
+import ww.wangnong.service.AlertService;
 import ww.wangnong.service.AlertService.AlertInfo;
 
 @Component
@@ -29,11 +30,11 @@ public class MockAlertGenerator {
             "A03_Node_01", "温室节点 1",
             "A03_Node_02", "温室节点 2");
 
-    private final MockAlertService alertService;
+    private final AlertService alertService;
     private final AlertRepository alertRepo;
     private final PahoMqttService mqttService;
 
-    public MockAlertGenerator(MockAlertService alertService, AlertRepository alertRepo,
+    public MockAlertGenerator(AlertService alertService, AlertRepository alertRepo,
             PahoMqttService mqttService) {
         this.alertService = alertService;
         this.alertRepo = alertRepo;

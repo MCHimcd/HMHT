@@ -1,4 +1,4 @@
-package ww.wangnong.mock;
+package ww.wangnong.service.impl;
 
 import java.util.List;
 
@@ -12,18 +12,19 @@ import ww.wangnong.repository.NodeRepository;
 import ww.wangnong.repository.UserNodeAccessRepository;
 import ww.wangnong.repository.UserRepository;
 import ww.wangnong.service.AdminService;
+import ww.wangnong.service.AuthService;
 import ww.wangnong.service.OperationLogService;
 
 @Service
-public class MockAdminService implements AdminService {
+public class DatabaseAdminService implements AdminService {
 
-    private final MockAuthService authService;
+    private final AuthService authService;
     private final NodeRepository nodeRepo;
     private final UserRepository userRepo;
     private final UserNodeAccessRepository userNodeAccessRepo;
     private final OperationLogService opLog;
 
-    public MockAdminService(MockAuthService authService,
+    public DatabaseAdminService(AuthService authService,
             NodeRepository nodeRepo,
             UserRepository userRepo,
             UserNodeAccessRepository userNodeAccessRepo,

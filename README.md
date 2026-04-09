@@ -29,13 +29,14 @@ HMHT/
 │   ├── HmhtApplication.java          # 启动类
 │   ├── web/                           # REST 控制器
 │   ├── service/                       # 业务逻辑接口
+│   │   └── impl/                      # 默认（数据库）实现
 │   ├── entity/                        # JPA 实体
 │   ├── dto/                           # 数据传输对象
 │   ├── repository/                    # Spring Data JPA 仓库
 │   ├── mqtt/                          # MQTT 客户端（Paho）
 │   ├── bridge/                        # MQTT/Python 桥接层
 │   ├── influx/                        # InfluxDB 写入
-│   ├── mock/                          # Mock 模式实现 & 种子数据
+│   ├── mock/                          # Mock 模式专属（模拟数据 & 种子）
 │   ├── config/                        # Spring 配置类
 │   │   └── condition/                 # 运行模式条件注解
 │   └── exception/                     # 全局异常处理
@@ -124,11 +125,11 @@ powershell -ExecutionPolicy Bypass -File .\scripts\tests\start.ps1.test.ps1
 | DTO / 异常 | `@Test` (纯 JUnit) | 3 |
 | 桥接与连接 | `@ExtendWith(MockitoExtension)` | 6 |
 | Repository | `@DataJpaTest` (H2) | 11 |
-| Service | `@ExtendWith(MockitoExtension)` | 10 |
+| Service | `@ExtendWith(MockitoExtension)` | 15 |
 | Controller | `@WebMvcTest` | 12 |
 | 启动与基础 | `@SpringBootTest` | 2 |
 
-共 **44 个测试类**。命名规则：`{method}_{scenario}_{expected}`；工厂：`TestDataFactory`；Spring Boot 4.x 使用 `@MockitoBean`。详见 `.github/instructions/java.instructions.md` 测试规范章节。
+共 **49 个测试类**。命名规则：`{method}_{scenario}_{expected}`；工厂：`TestDataFactory`；Spring Boot 4.x 使用 `@MockitoBean`。详见 `.github/instructions/java.instructions.md` 测试规范章节。
 
 ## REST API
 
@@ -192,20 +193,20 @@ powershell -ExecutionPolicy Bypass -File .\scripts\tests\start.ps1.test.ps1
 
 Service 接口（`ww.wangnong.service`）根据运行模式由不同实现提供：
 
-| 接口 | Mock 实现 | Bridge 实现 | 说明 |
-|------|-----------|-------------|------|
-| `AuthService` | `MockAuthService` | — | 认证 & 用户管理 |
-| `NodeService` | `MockNodeService` | — | 节点元数据聚合 |
-| `AlertService` | `MockAlertService` | — | 告警查询 & 处理 |
-| `SensorService` | `MockSensorService` | `InfluxSensorService` | 传感器历史 |
+| 接口 | 默认实现 | Mock/Bridge 实现 | 说明 |
+|------|----------|------------------|------|
+| `AuthService` | `DatabaseAuthService` | — | 认证 & 用户管理 |
+| `NodeService` | `DatabaseNodeService` | — | 节点元数据聚合 |
+| `AlertService` | `DatabaseAlertService` | — | 告警查询 & 处理 |
+| `SensorService` | — | `MockSensorService`(mock) / `InfluxSensorService`(bridge+) | 传感器历史 |
 | `DeviceService` | `DatabaseDeviceService` | — | 设备能力 & 影子 |
-| `ChatService` | `MockChatService` | `AgriChatService` | AI 对话 |
-| `ExtraService` | `MockExtraService` | — | 溯源 & 摄像头 |
-| `AdminService` | `MockAdminService` | — | 管理员操作 |
-| `ScheduledTaskService` | `MockScheduledTaskService` | — | 定时任务 |
+| `ChatService` | — | `MockChatService`(mock) / `AgriChatService`(bridge+) | AI 对话 |
+| `ExtraService` | — | `MockExtraService`(mock) | 溯源 & 摄像头 |
+| `AdminService` | `DatabaseAdminService` | — | 管理员操作 |
+| `ScheduledTaskService` | `DatabaseScheduledTaskService` | — | 定时任务 |
 | `OperationLogService` | — | — | 操作日志（直接实现） |
 
-**补充组件**：`MockDataLifecycle`（种子数据）、`MockMqttSimulator` / `MockAlertGenerator` / `MockTaskExecutor`（mock 模拟）、`MqttBridge`（桥接）、`TelemetryTranslator`（遥测翻译）、`InfluxTelemetryWriter`（InfluxDB 写入）、`ProtocolPersistenceService`（控制面持久化）、`CommandAckTracker`（ACK 重试）、`PahoMqttService`（MQTT 客户端）、`MqttSubscriptionRegistry`（订阅注册）。
+**补充组件**：`MockDataLifecycle`（种子数据）、`MockMqttSimulator` / `MockAlertGenerator` / `MockTaskExecutor`（mock 模拟）、`MockSensorService`（mock 传感器）、`MockExtraService`（mock 溯源/摄像头）、`MqttBridge`（桥接）、`TelemetryTranslator`（遥测翻译）、`InfluxTelemetryWriter`（InfluxDB 写入）、`ProtocolPersistenceService`（控制面持久化）、`CommandAckTracker`（ACK 重试）、`PahoMqttService`（MQTT 客户端）、`MqttSubscriptionRegistry`（订阅注册）。
 
 ## MQTT 协议
 

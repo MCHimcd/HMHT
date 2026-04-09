@@ -8,9 +8,11 @@ import java.util.Random;
 
 import org.springframework.stereotype.Service;
 
+import ww.wangnong.config.condition.ConditionalOnMockMode;
 import ww.wangnong.service.SensorService;
 
 @Service
+@ConditionalOnMockMode
 public class MockSensorService implements SensorService {
 
     private static final Random RNG = new Random();

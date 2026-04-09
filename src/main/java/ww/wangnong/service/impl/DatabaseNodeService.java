@@ -1,4 +1,4 @@
-package ww.wangnong.mock;
+package ww.wangnong.service.impl;
 
 import java.util.List;
 import java.util.LinkedHashMap;
@@ -31,11 +31,12 @@ import ww.wangnong.repository.NodeRepository;
 import ww.wangnong.repository.NodeSensorRepository;
 import ww.wangnong.repository.SensorTypeRepository;
 import ww.wangnong.repository.UserNodeAccessRepository;
+import ww.wangnong.service.AuthService;
 import ww.wangnong.service.NodeService;
 import ww.wangnong.service.OperationLogService;
 
 @Service
-public class MockNodeService implements NodeService {
+public class DatabaseNodeService implements NodeService {
 
     private static final long HEARTBEAT_TIMEOUT_SECONDS = 60;
     private static final String DEFAULT_SENSOR_ICON = "sensor";
@@ -43,7 +44,7 @@ public class MockNodeService implements NodeService {
     private static final String DEFAULT_SENSOR_BG_COLOR = "#ECEFF1";
     private static final String DEFAULT_EQUIPMENT_ICON = "device";
 
-    private final MockAuthService authService;
+    private final AuthService authService;
     private final NodeRepository nodeRepo;
     private final SensorTypeRepository sensorTypeRepo;
     private final NodeSensorRepository nodeSensorRepo;
@@ -56,7 +57,7 @@ public class MockNodeService implements NodeService {
     private final DeviceProfileRepository deviceProfileRepository;
     private final OperationLogService opLog;
 
-    public MockNodeService(MockAuthService authService,
+    public DatabaseNodeService(AuthService authService,
             NodeRepository nodeRepo,
             SensorTypeRepository sensorTypeRepo,
             NodeSensorRepository nodeSensorRepo,

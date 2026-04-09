@@ -4,14 +4,19 @@ import org.springframework.web.multipart.MultipartFile;
 
 import com.fasterxml.jackson.annotation.JsonProperty;
 
+import ww.wangnong.entity.User;
+
 public interface AuthService {
 
-    record LoginResult(String token, @JsonProperty("expires_in") int expiresIn) {}
+    record LoginResult(String token, @JsonProperty("expires_in") int expiresIn) {
+    }
 
-    record CodeResult(@JsonProperty("expires_in") int expiresIn, @JsonProperty("test_code") String testCode) {}
+    record CodeResult(@JsonProperty("expires_in") int expiresIn, @JsonProperty("test_code") String testCode) {
+    }
 
     record Profile(String userId, String userName, String phone, String gender,
-                   String birthDate, String avatarSrc, String role) {}
+            String birthDate, String avatarSrc, String role) {
+    }
 
     LoginResult login(String username, String password);
 
@@ -24,7 +29,7 @@ public interface AuthService {
     Profile getProfile(String token);
 
     Profile updateProfile(String token, String userName, String gender,
-                          String birthDate, String avatarSrc);
+            String birthDate, String avatarSrc);
 
     void changePassword(String token, String oldPassword, String newPassword);
 
@@ -33,4 +38,8 @@ public interface AuthService {
     Profile uploadAvatar(String token, MultipartFile file);
 
     void logout(String token);
+
+    User requireUser(String token);
+
+    User requireAdmin(String token);
 }

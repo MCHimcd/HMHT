@@ -1,4 +1,4 @@
-package ww.wangnong.mock;
+package ww.wangnong.service.impl;
 
 import java.time.ZoneId;
 import java.util.List;
@@ -9,17 +9,18 @@ import ww.wangnong.entity.ScheduledTask;
 import ww.wangnong.entity.User;
 import ww.wangnong.exception.BizException;
 import ww.wangnong.repository.ScheduledTaskRepository;
+import ww.wangnong.service.AuthService;
 import ww.wangnong.service.OperationLogService;
 import ww.wangnong.service.ScheduledTaskService;
 
 @Service
-public class MockScheduledTaskService implements ScheduledTaskService {
+public class DatabaseScheduledTaskService implements ScheduledTaskService {
 
-    private final MockAuthService authService;
+    private final AuthService authService;
     private final ScheduledTaskRepository taskRepo;
     private final OperationLogService opLog;
 
-    public MockScheduledTaskService(MockAuthService authService,
+    public DatabaseScheduledTaskService(AuthService authService,
             ScheduledTaskRepository taskRepo,
             OperationLogService opLog) {
         this.authService = authService;

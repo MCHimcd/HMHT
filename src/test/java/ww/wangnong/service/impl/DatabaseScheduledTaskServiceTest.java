@@ -1,4 +1,4 @@
-package ww.wangnong.mock;
+package ww.wangnong.service.impl;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -20,24 +20,25 @@ import ww.wangnong.entity.ScheduledTask;
 import ww.wangnong.entity.User;
 import ww.wangnong.exception.BizException;
 import ww.wangnong.repository.ScheduledTaskRepository;
+import ww.wangnong.service.AuthService;
 import ww.wangnong.service.OperationLogService;
 import ww.wangnong.service.ScheduledTaskService.TaskInfo;
 
 @ExtendWith(MockitoExtension.class)
-class MockScheduledTaskServiceTest {
+class DatabaseScheduledTaskServiceTest {
 
     @Mock
-    private MockAuthService authService;
+    private AuthService authService;
     @Mock
     private ScheduledTaskRepository taskRepo;
     @Mock
     private OperationLogService opLog;
 
-    private MockScheduledTaskService service;
+    private DatabaseScheduledTaskService service;
 
     @BeforeEach
     void setUp() {
-        service = new MockScheduledTaskService(authService, taskRepo, opLog);
+        service = new DatabaseScheduledTaskService(authService, taskRepo, opLog);
     }
 
     private User stubUser() {

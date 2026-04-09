@@ -1,4 +1,4 @@
-package ww.wangnong.mock;
+package ww.wangnong.service.impl;
 
 import java.time.Instant;
 import java.time.LocalDateTime;
@@ -18,13 +18,13 @@ import ww.wangnong.service.AlertService;
 import ww.wangnong.service.OperationLogService;
 
 @Service
-public class MockAlertService implements AlertService {
+public class DatabaseAlertService implements AlertService {
 
     private static final int MAX_SIZE = 200;
     private final AlertRepository alertRepo;
     private final OperationLogService opLog;
 
-    public MockAlertService(AlertRepository alertRepo, OperationLogService opLog) {
+    public DatabaseAlertService(AlertRepository alertRepo, OperationLogService opLog) {
         this.alertRepo = alertRepo;
         this.opLog = opLog;
     }

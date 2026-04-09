@@ -1,4 +1,4 @@
-package ww.wangnong.mock;
+package ww.wangnong.service.impl;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -24,13 +24,14 @@ import ww.wangnong.repository.NodeRepository;
 import ww.wangnong.repository.UserNodeAccessRepository;
 import ww.wangnong.repository.UserRepository;
 import ww.wangnong.service.AdminService.UserInfo;
+import ww.wangnong.service.AuthService;
 import ww.wangnong.service.OperationLogService;
 
 @ExtendWith(MockitoExtension.class)
-class MockAdminServiceTest {
+class DatabaseAdminServiceTest {
 
     @Mock
-    private MockAuthService authService;
+    private AuthService authService;
     @Mock
     private NodeRepository nodeRepo;
     @Mock
@@ -40,11 +41,11 @@ class MockAdminServiceTest {
     @Mock
     private OperationLogService opLog;
 
-    private MockAdminService service;
+    private DatabaseAdminService service;
 
     @BeforeEach
     void setUp() {
-        service = new MockAdminService(authService, nodeRepo, userRepo,
+        service = new DatabaseAdminService(authService, nodeRepo, userRepo,
                 userNodeAccessRepo, opLog);
     }
 

@@ -1,4 +1,4 @@
-package ww.wangnong.mock;
+package ww.wangnong.service.impl;
 
 import java.io.IOException;
 import java.nio.file.Files;
@@ -27,9 +27,9 @@ import ww.wangnong.service.AuthService;
 import ww.wangnong.service.OperationLogService;
 
 @Service
-public class MockAuthService implements AuthService {
+public class DatabaseAuthService implements AuthService {
 
-    private static final Logger log = LoggerFactory.getLogger(MockAuthService.class);
+    private static final Logger log = LoggerFactory.getLogger(DatabaseAuthService.class);
     private static final Random RNG = new Random();
     private static final Set<String> ALLOWED_CONTENT_TYPES = Set.of("image/png", "image/jpeg", "image/jpg");
     private static final long MAX_FILE_SIZE = 5 * 1024 * 1024; // 5MB
@@ -45,7 +45,7 @@ public class MockAuthService implements AuthService {
     @Value("${server.port:8080}")
     private int serverPort;
 
-    public MockAuthService(UserRepository userRepo, VerificationCodeRepository codeRepo,
+    public DatabaseAuthService(UserRepository userRepo, VerificationCodeRepository codeRepo,
             OperationLogService opLog) {
         this.userRepo = userRepo;
         this.codeRepo = codeRepo;
@@ -75,7 +75,7 @@ public class MockAuthService implements AuthService {
         vc.setExpiresAt(LocalDateTime.now().plusMinutes(5));
         codeRepo.save(vc);
 
-        log.info("[MockAuth] 验证码 phone={}, code={}", phone, code);
+        log.info("[Auth] 验证码 phone={}, code={}", phone, code);
         return new CodeResult(300, code);
     }
 
@@ -166,9 +166,9 @@ public class MockAuthService implements AuthService {
         try {
             Files.createDirectories(avatarRoot);
             file.transferTo(targetPath.toFile());
-            log.info("[MockAuth] 头像已保存: {}", targetPath.toAbsolutePath());
+            log.info("[Auth] 头像已保存: {}", targetPath.toAbsolutePath());
         } catch (IOException e) {
-            log.error("[MockAuth] 保存头像失败", e);
+            log.error("[Auth] 保存头像失败", e);
             throw new BizException(500, "保存头像失败");
         }
 
@@ -189,9 +189,9 @@ public class MockAuthService implements AuthService {
             Path oldPath = resolveAvatarRootDir().resolve(oldFilename);
             try {
                 Files.deleteIfExists(oldPath);
-                log.info("[MockAuth] 已删除旧头像: {}", oldPath);
+                log.info("[Auth] 已删除旧头像: {}", oldPath);
             } catch (IOException e) {
-                log.warn("[MockAuth] 删除旧头像失败: {}", oldPath, e);
+                log.warn("[Auth] 删除旧头像失败: {}", oldPath, e);
             }
         }
     }
@@ -224,6 +224,7 @@ public class MockAuthService implements AuthService {
         codeRepo.save(vc);
     }
 
+    @Override
     public User requireUser(String token) {
         Long userId = tokenToUserId.get(token);
         if (userId == null)
@@ -240,6 +241,7 @@ public class MockAuthService implements AuthService {
                 u.getAvatarSrc(), u.getRole());
     }
 
+    @Override
     public User requireAdmin(String token) {
         User user = requireUser(token);
         if (!"admin".equals(user.getRole())) {

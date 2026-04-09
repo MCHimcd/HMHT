@@ -29,7 +29,8 @@ public class InfluxTelemetryService {
      *
      * @param deviceId  设备标识
      * @param timestamp MQTT 原始毫秒时间戳
-     * @param env       环境数据 map (temperature, humidity, soilTemp, soilHumidity, soilPh, light, co2)
+     * @param env       环境数据 map (temperature, humidity, soilTemp, soilHumidity,
+     *                  soilPh, light, co2)
      */
     public void writeEnvironment(String deviceId, long timestamp, Map<String, Double> env) {
         if (env == null || env.isEmpty()) {
@@ -57,7 +58,7 @@ public class InfluxTelemetryService {
 
         try {
             client.writeRecord(lp.toString(), new WriteOptions(null, WritePrecision.NS, null));
-            log.debug("InfluxDB environment written: device={}", deviceId);
+            log.trace("InfluxDB environment written: device={}", deviceId);
         } catch (Exception e) {
             log.error("InfluxDB write environment failed: device={}", deviceId, e);
         }
@@ -72,7 +73,7 @@ public class InfluxTelemetryService {
      * @param mode      运行模式 (smart / manual)
      */
     public void writeEquipmentState(String deviceId, long timestamp,
-                                     Map<String, Boolean> equipment, String mode) {
+            Map<String, Boolean> equipment, String mode) {
         StringBuilder lp = new StringBuilder("equipment_state,device_id=")
                 .append(escapeTag(deviceId));
 
@@ -101,7 +102,7 @@ public class InfluxTelemetryService {
 
         try {
             client.writeRecord(lp.toString(), new WriteOptions(null, WritePrecision.NS, null));
-            log.debug("InfluxDB equipment_state written: device={}", deviceId);
+            log.trace("InfluxDB equipment_state written: device={}", deviceId);
         } catch (Exception e) {
             log.error("InfluxDB write equipment_state failed: device={}", deviceId, e);
         }

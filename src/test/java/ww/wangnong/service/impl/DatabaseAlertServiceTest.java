@@ -1,4 +1,4 @@
-package ww.wangnong.mock;
+package ww.wangnong.service.impl;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -26,18 +26,18 @@ import ww.wangnong.service.AlertService.AlertListResult;
 import ww.wangnong.service.OperationLogService;
 
 @ExtendWith(MockitoExtension.class)
-class MockAlertServiceTest {
+class DatabaseAlertServiceTest {
 
     @Mock
     private AlertRepository alertRepo;
     @Mock
     private OperationLogService opLog;
 
-    private MockAlertService service;
+    private DatabaseAlertService service;
 
     @BeforeEach
     void setUp() {
-        service = new MockAlertService(alertRepo, opLog);
+        service = new DatabaseAlertService(alertRepo, opLog);
     }
 
     private Alert stubAlert(String alertId, boolean handled) {

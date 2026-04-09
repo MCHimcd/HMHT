@@ -122,7 +122,7 @@ public class MqttBridge {
 
             // 4) Python command ACK → log only
             subscriptionRegistry.register(PY_ACK, BRIDGE_QOS, msg -> {
-                log.info("[Bridge] Command ACK received: topic={}, payload={}", msg.topic(), msg.payload());
+                log.debug("[Bridge] Command ACK received: topic={}, payload={}", msg.topic(), msg.payload());
                 protocolPersistenceService.recordIngestAudit(
                         "ack",
                         msg.topic(),
@@ -137,7 +137,7 @@ public class MqttBridge {
         if (enableHardwareRoute) {
             // 1.1) Hardware V2 telemetry → normalize → App telemetry + InfluxDB
             subscriptionRegistry.register(HW_TELEMETRY, BRIDGE_QOS, msg -> {
-                log.info("[Bridge][HW-IN] topic={}, qos={}, retained={}, payload={}",
+                log.debug("[Bridge][HW-IN] topic={}, qos={}, retained={}, payload={}",
                         msg.topic(),
                         msg.qos(),
                         msg.retained(),
@@ -239,7 +239,7 @@ public class MqttBridge {
 
             // 4.1) Hardware ACK → relay to App ACK topic + log
             subscriptionRegistry.register(HW_ACK, BRIDGE_QOS, msg -> {
-                log.info("[Bridge][HW-IN] topic={}, qos={}, retained={}, payload={}",
+                log.debug("[Bridge][HW-IN] topic={}, qos={}, retained={}, payload={}",
                         msg.topic(),
                         msg.qos(),
                         msg.retained(),

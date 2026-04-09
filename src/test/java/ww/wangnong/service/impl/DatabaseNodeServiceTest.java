@@ -1,4 +1,4 @@
-package ww.wangnong.mock;
+package ww.wangnong.service.impl;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -36,6 +36,7 @@ import ww.wangnong.repository.NodeRepository;
 import ww.wangnong.repository.NodeSensorRepository;
 import ww.wangnong.repository.SensorTypeRepository;
 import ww.wangnong.repository.UserNodeAccessRepository;
+import ww.wangnong.service.AuthService;
 import ww.wangnong.service.NodeService.EquipmentMetaInfo;
 import ww.wangnong.service.NodeService.NodeDetail;
 import ww.wangnong.service.NodeService.NodeInfo;
@@ -43,10 +44,10 @@ import ww.wangnong.service.NodeService.SensorMetaInfo;
 import ww.wangnong.service.OperationLogService;
 
 @ExtendWith(MockitoExtension.class)
-class MockNodeServiceTest {
+class DatabaseNodeServiceTest {
 
     @Mock
-    private MockAuthService authService;
+    private AuthService authService;
     @Mock
     private NodeRepository nodeRepo;
     @Mock
@@ -70,11 +71,11 @@ class MockNodeServiceTest {
     @Mock
     private OperationLogService opLog;
 
-    private MockNodeService service;
+    private DatabaseNodeService service;
 
     @BeforeEach
     void setUp() {
-        service = new MockNodeService(authService, nodeRepo, sensorTypeRepo,
+        service = new DatabaseNodeService(authService, nodeRepo, sensorTypeRepo,
                 nodeSensorRepo, equipmentTypeRepo, nodeEquipmentRepo,
                 userNodeAccessRepo,
                 deviceCapabilityRepository,

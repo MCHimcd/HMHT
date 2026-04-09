@@ -1,4 +1,4 @@
-package ww.wangnong.mock;
+package ww.wangnong.service.impl;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -33,7 +33,7 @@ import ww.wangnong.service.AuthService.Profile;
 import ww.wangnong.service.OperationLogService;
 
 @ExtendWith(MockitoExtension.class)
-class MockAuthServiceTest {
+class DatabaseAuthServiceTest {
 
     @Mock
     private UserRepository userRepo;
@@ -42,11 +42,11 @@ class MockAuthServiceTest {
     @Mock
     private OperationLogService opLog;
 
-    private MockAuthService service;
+    private DatabaseAuthService service;
 
     @BeforeEach
     void setUp() {
-        service = new MockAuthService(userRepo, codeRepo, opLog);
+        service = new DatabaseAuthService(userRepo, codeRepo, opLog);
     }
 
     private User stubUser() {
@@ -61,7 +61,7 @@ class MockAuthServiceTest {
 
     private void setPrivateField(String fieldName, Object value) {
         try {
-            Field field = MockAuthService.class.getDeclaredField(fieldName);
+            Field field = DatabaseAuthService.class.getDeclaredField(fieldName);
             field.setAccessible(true);
             field.set(service, value);
         } catch (ReflectiveOperationException ex) {
