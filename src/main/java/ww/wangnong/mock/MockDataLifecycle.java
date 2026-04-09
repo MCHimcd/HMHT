@@ -1,6 +1,5 @@
 package ww.wangnong.mock;
 
-import java.time.Instant;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.Map;
@@ -12,9 +11,9 @@ import org.springframework.boot.ApplicationArguments;
 import org.springframework.boot.ApplicationRunner;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.jdbc.core.JdbcTemplate;
-import org.springframework.lang.Nullable;
 import org.springframework.stereotype.Component;
 
+import jakarta.annotation.Nullable;
 import jakarta.annotation.PreDestroy;
 import ww.wangnong.entity.EquipmentType;
 import ww.wangnong.entity.Node;
@@ -50,7 +49,7 @@ public class MockDataLifecycle implements ApplicationRunner {
     private final AlertService alertService;
     private final AlertRepository alertRepo;
     private final JdbcTemplate jdbc;
-    @Nullable
+    @jakarta.annotation.Nullable
     private final InfluxTelemetryService influxService;
 
     public MockDataLifecycle(UserRepository userRepo, NodeRepository nodeRepo,
@@ -96,9 +95,9 @@ public class MockDataLifecycle implements ApplicationRunner {
     public void cleanup() {
         log.info("[MockData] 正在清除数据库数据...");
         String[] tables = { "command_retry_log", "device_shadow", "capability_equipment",
-            "capability_sensor", "device_capability", "device_profile",
-            "command_ack", "command_request", "ingest_deadletter", "ingest_audit",
-            "scheduled_tasks", "operation_logs", "user_node_access",
+                "capability_sensor", "device_capability", "device_profile",
+                "command_ack", "command_request", "ingest_deadletter", "ingest_audit",
+                "scheduled_tasks", "operation_logs", "user_node_access",
                 "chat_messages", "command_logs", "alerts", "node_sensor",
                 "node_equipment", "sensor_type", "equipment_type",
                 "verification_codes", "nodes", "users" };

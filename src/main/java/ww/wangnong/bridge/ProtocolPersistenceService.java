@@ -373,7 +373,6 @@ public class ProtocolPersistenceService {
         }
     }
 
-    @SuppressWarnings("unchecked")
     private void upsertDeviceShadow(
             String deviceId,
             String commandId,

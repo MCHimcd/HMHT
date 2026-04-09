@@ -12,7 +12,6 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
-import org.springframework.lang.Nullable;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
@@ -35,7 +34,7 @@ public class MockMqttSimulator {
     private static final String COMMAND_TOPIC = "/wangnong_2026/node/+/command";
 
     private final PahoMqttService mqttService;
-    @Nullable
+    @org.jspecify.annotations.Nullable
     private final InfluxTelemetryService influxService;
     private final NodeSensorRepository nodeSensorRepo;
     private final AlertService alertService;
@@ -68,7 +67,7 @@ public class MockMqttSimulator {
             "soilHumidity", "%");
 
     public MockMqttSimulator(PahoMqttService mqttService,
-            @Nullable InfluxTelemetryService influxService,
+            @org.jspecify.annotations.Nullable InfluxTelemetryService influxService,
             NodeSensorRepository nodeSensorRepo,
             AlertService alertService) {
         this.mqttService = mqttService;

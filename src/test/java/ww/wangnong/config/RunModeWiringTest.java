@@ -2,11 +2,8 @@ package ww.wangnong.config;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import java.lang.annotation.Annotation;
-
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
-import org.springframework.context.annotation.Conditional;
 
 import ww.wangnong.bridge.AgriChatService;
 import ww.wangnong.bridge.CommandAckTracker;

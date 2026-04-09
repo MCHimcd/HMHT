@@ -24,6 +24,7 @@ class InfluxSensorServiceTest {
     @Mock
     private InfluxDBClient influxClient;
 
+    @SuppressWarnings("null")
     @Test
     void getSensorHistory_metricQuery_usesTelemetryMetricMeasurement() {
         InfluxSensorService service = new InfluxSensorService(influxClient);
@@ -46,6 +47,7 @@ class InfluxSensorServiceTest {
         assertThat(sql).contains("metric = 'temperature'");
     }
 
+    @SuppressWarnings("null")
     @Test
     void getSensorHistory_newMeasurementEmpty_fallsBackToLegacyEnvironment() {
         InfluxSensorService service = new InfluxSensorService(influxClient);
@@ -61,6 +63,7 @@ class InfluxSensorServiceTest {
         verify(influxClient, times(2)).query(any(String.class), any(QueryOptions.class));
     }
 
+    @SuppressWarnings("null")
     @Test
     void getEquipmentStats_queryStillUsesEquipmentState() {
         InfluxSensorService service = new InfluxSensorService(influxClient);

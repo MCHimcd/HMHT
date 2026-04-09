@@ -14,7 +14,6 @@ import org.springframework.stereotype.Component;
 
 import ww.wangnong.mqtt.PahoMqttService;
 import ww.wangnong.repository.AlertRepository;
-import ww.wangnong.repository.AlertRepository;
 import ww.wangnong.service.AlertService.AlertInfo;
 
 @Component

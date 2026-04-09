@@ -108,7 +108,8 @@ public class InfluxSensorService implements SensorService {
                         + "GROUP BY 1 ORDER BY 1",
                 sanitizeTag(nodeId), sanitizeTag(equipmentKey));
 
-        try (Stream<Object[]> stream = influxClient.query(sql, new QueryOptions("", QueryType.SQL))) {
+        try (@SuppressWarnings("null")
+        Stream<Object[]> stream = influxClient.query(sql, new QueryOptions("", QueryType.SQL))) {
             List<StatsPoint> points = new ArrayList<>();
             double total = 0;
             DateTimeFormatter fmt = DateTimeFormatter.ofPattern("MM-dd");
@@ -165,7 +166,8 @@ public class InfluxSensorService implements SensorService {
     }
 
     private Optional<SensorHistoryResult> queryHistory(String metric, DateTimeFormatter fmt, String sql) {
-        try (Stream<Object[]> stream = influxClient.query(sql, new QueryOptions("", QueryType.SQL))) {
+        try (@SuppressWarnings("null")
+        Stream<Object[]> stream = influxClient.query(sql, new QueryOptions("", QueryType.SQL))) {
             List<HistoryPoint> points = new ArrayList<>();
             double min = Double.MAX_VALUE, max = -Double.MAX_VALUE, sum = 0;
             int count = 0;

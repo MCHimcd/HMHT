@@ -25,6 +25,7 @@ class InfluxTelemetryWriterTest {
     @Mock
     private InfluxDBClient influxClient;
 
+    @SuppressWarnings("null")
     @Test
     void writeTelemetry_hasEnvironmentAndEquipment_writesTelemetryMetricAndEquipmentState() {
         InfluxTelemetryWriter writer = new InfluxTelemetryWriter(influxClient);
@@ -58,6 +59,7 @@ class InfluxTelemetryWriterTest {
                 && line.contains("status=\"on\""));
     }
 
+    @SuppressWarnings("null")
     @Test
     void writeTelemetry_noNumericEnvironment_skipsTelemetryMetric() {
         InfluxTelemetryWriter writer = new InfluxTelemetryWriter(influxClient);

@@ -10,6 +10,7 @@ import org.springframework.context.annotation.Configuration;
 @ConditionalOnProperty(prefix = "hmht.influxdb", name = "enabled", havingValue = "true")
 public class InfluxDbConfig {
 
+    @SuppressWarnings("null")
     @Bean
     public InfluxDBClient influxDBClient(InfluxDbProperties properties) {
         return InfluxDBClient.getInstance(

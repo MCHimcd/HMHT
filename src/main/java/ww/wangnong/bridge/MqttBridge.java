@@ -193,11 +193,12 @@ public class MqttBridge {
                         capabilityPayload.put("device_id", topicDeviceId);
                     }
 
-                    @SuppressWarnings("unchecked")
                     Map<String, Object> payload = extractPayloadMap(capabilityPayload);
+                    @SuppressWarnings("unchecked")
                     Map<String, Object> sensors = payload.get("sensors") instanceof Map<?, ?> map
                             ? (Map<String, Object>) map
                             : Map.of();
+                    @SuppressWarnings("unchecked")
                     Map<String, Object> equipments = payload.get("equipments") instanceof Map<?, ?> map
                             ? (Map<String, Object>) map
                             : Map.of();
@@ -245,7 +246,6 @@ public class MqttBridge {
                         msg.payload());
                 try {
                     Map<String, Object> ackPayload = MAPPER.readValue(msg.payload(), MAP_TYPE);
-                    @SuppressWarnings("unchecked")
                     Map<String, Object> ackData = extractPayloadMap(ackPayload);
                     String nodeId = firstNonBlank(
                             str(ackPayload.get("device_id")),

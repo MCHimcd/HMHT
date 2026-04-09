@@ -11,7 +11,7 @@
 | 类别 | 技术 | 版本 |
 |------|------|------|
 | 语言 | Java | 21 |
-| 框架 | Spring Boot | 4.0.4 |
+| 框架 | Spring Boot | 4.0.5 |
 | 构建 | Gradle (Wrapper) | — |
 | 关系数据库 | MySQL | 8.x |
 | 数据库迁移 | Flyway | — |

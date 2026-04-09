@@ -8,8 +8,9 @@ import com.influxdb.v3.client.write.WritePrecision;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.lang.Nullable;
 import org.springframework.stereotype.Component;
+
+import jakarta.annotation.Nullable;
 
 /**
  * Writes translated telemetry data to InfluxDB.
