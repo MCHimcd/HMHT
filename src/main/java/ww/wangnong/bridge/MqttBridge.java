@@ -3,6 +3,7 @@ package ww.wangnong.bridge;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.UUID;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -14,8 +15,12 @@ import org.springframework.stereotype.Component;
 import jakarta.annotation.PostConstruct;
 import ww.wangnong.config.RunModeHolder;
 import ww.wangnong.config.condition.ConditionalOnBridgeMode;
+import ww.wangnong.mock.SimNodeSimulator;
 import ww.wangnong.mqtt.MqttSubscriptionRegistry;
 import ww.wangnong.mqtt.PahoMqttService;
+import ww.wangnong.repository.NodeEquipmentRepository;
+import ww.wangnong.repository.NodeRepository;
+import ww.wangnong.repository.NodeSensorRepository;
 import ww.wangnong.service.AlertService;
 import ww.wangnong.service.AlertService.AlertInfo;
 
@@ -62,19 +67,35 @@ public class MqttBridge {
     private final MqttSubscriptionRegistry subscriptionRegistry;
     private final ProtocolPersistenceService protocolPersistenceService;
     private final RunModeHolder runModeHolder;
+    private final TelemetryAlertChecker alertChecker;
+    private final SimNodeSimulator simNodeSimulator;
+    private final NodeRepository nodeRepo;
+    private final NodeSensorRepository nodeSensorRepo;
+    private final NodeEquipmentRepository nodeEquipmentRepo;
+    private final AtomicBoolean realHardwareReceived = new AtomicBoolean(false);
 
     public MqttBridge(PahoMqttService mqtt,
             AlertService alertService,
             InfluxTelemetryWriter influxWriter,
             MqttSubscriptionRegistry subscriptionRegistry,
             ProtocolPersistenceService protocolPersistenceService,
-            RunModeHolder runModeHolder) {
+            RunModeHolder runModeHolder,
+            TelemetryAlertChecker alertChecker,
+            SimNodeSimulator simNodeSimulator,
+            NodeRepository nodeRepo,
+            NodeSensorRepository nodeSensorRepo,
+            NodeEquipmentRepository nodeEquipmentRepo) {
         this.mqtt = mqtt;
         this.alertService = alertService;
         this.influxWriter = influxWriter;
         this.subscriptionRegistry = subscriptionRegistry;
         this.protocolPersistenceService = protocolPersistenceService;
         this.runModeHolder = runModeHolder;
+        this.alertChecker = alertChecker;
+        this.simNodeSimulator = simNodeSimulator;
+        this.nodeRepo = nodeRepo;
+        this.nodeSensorRepo = nodeSensorRepo;
+        this.nodeEquipmentRepo = nodeEquipmentRepo;
     }
 
     @PostConstruct
@@ -156,6 +177,7 @@ public class MqttBridge {
 
                     Map<String, Object> appPayload = TelemetryTranslator.hardwareV2ToApp(hwPayload);
                     forwardTelemetry(msg.topic(), appPayload);
+                    retireSimNodeOnFirstRealHardware();
 
                     protocolPersistenceService.recordIngestAudit(
                             "telemetry",
@@ -354,7 +376,8 @@ public class MqttBridge {
                 } else if (enablePythonRoute) {
                     log.debug("[Bridge] Command forwarded: {} → {}", topic, pyTopic);
                 } else {
-                    log.debug("[Bridge] Command forwarded: {} → {}", topic, hwTopic);
+                    log.info("[Bridge][HW-OUT] Command forwarded: {} → {}, payload={}",
+                            topic, hwTopic, hwEnvelope != null ? hwEnvelope.rawJson() : msg.payload());
                 }
             } catch (Exception e) {
                 log.warn("[Bridge] Failed to bridge command: {}", msg.topic(), e);
@@ -386,6 +409,7 @@ public class MqttBridge {
         String appTopic = APP_TOPIC_PREFIX + nodeId + "/telemetry";
         mqtt.publish(appTopic, MAPPER.writeValueAsString(appPayload), 1, false);
         influxWriter.writeTelemetry(nodeId, appPayload);
+        alertChecker.checkAndAlert(nodeId, appPayload);
         log.debug("[Bridge] Telemetry forwarded: {} → {}", sourceTopic, appTopic);
     }
 
@@ -658,5 +682,22 @@ public class MqttBridge {
             case "Pepper__bell___Bacterial_spot" -> "辣椒细菌性斑点";
             default -> diseaseName.replace("_", " ");
         };
+    }
+
+    /**
+     * 首次收到真实硬件遥测时，自动删除 SIM 模拟节点及其关联数据，并关停模拟器。
+     */
+    private void retireSimNodeOnFirstRealHardware() {
+        if (!realHardwareReceived.compareAndSet(false, true)) {
+            return;
+        }
+        String simId = SimNodeSimulator.NODE_ID;
+        simNodeSimulator.shutdown();
+        nodeRepo.findByNodeId(simId).ifPresent(node -> {
+            nodeSensorRepo.findByNodeId(simId).forEach(nodeSensorRepo::delete);
+            nodeEquipmentRepo.findByNodeId(simId).forEach(nodeEquipmentRepo::delete);
+            nodeRepo.delete(node);
+            log.info("[Bridge] Real hardware detected — SIM node {} retired.", simId);
+        });
     }
 }

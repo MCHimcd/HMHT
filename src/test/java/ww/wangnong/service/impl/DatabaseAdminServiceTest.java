@@ -20,7 +20,9 @@ import ww.wangnong.entity.Node;
 import ww.wangnong.entity.User;
 import ww.wangnong.entity.UserNodeAccess;
 import ww.wangnong.exception.BizException;
+import ww.wangnong.repository.NodeEquipmentRepository;
 import ww.wangnong.repository.NodeRepository;
+import ww.wangnong.repository.NodeSensorRepository;
 import ww.wangnong.repository.UserNodeAccessRepository;
 import ww.wangnong.repository.UserRepository;
 import ww.wangnong.service.AdminService.UserInfo;
@@ -39,6 +41,10 @@ class DatabaseAdminServiceTest {
     @Mock
     private UserNodeAccessRepository userNodeAccessRepo;
     @Mock
+    private NodeSensorRepository nodeSensorRepo;
+    @Mock
+    private NodeEquipmentRepository nodeEquipmentRepo;
+    @Mock
     private OperationLogService opLog;
 
     private DatabaseAdminService service;
@@ -46,7 +52,7 @@ class DatabaseAdminServiceTest {
     @BeforeEach
     void setUp() {
         service = new DatabaseAdminService(authService, nodeRepo, userRepo,
-                userNodeAccessRepo, opLog);
+                userNodeAccessRepo, nodeSensorRepo, nodeEquipmentRepo, opLog);
     }
 
     private User stubAdmin() {

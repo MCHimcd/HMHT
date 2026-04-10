@@ -42,5 +42,7 @@ Assert-True (-not ($content -match 'return\s+"EXISTS_BUT_UNKNOWN"')) 'start.ps1 
 Assert-True ($content -match '\$createResult\.alreadyExists') 'start.ps1 should explicitly detect token-exists conflict and stop auto-injection.'
 Assert-True ($content -match 'influxTokenCache.*hmht-admin\.token') 'start.ps1 should pre-check token cache and clean InfluxDB data dir to prevent token conflict.'
 Assert-True ($content -match '\$rawText\s*=.*Out-String') 'Try-CreateInfluxToken should convert all output to string before pattern matching to detect errors from both stdout and stderr.'
+Assert-True ($content -match 'failedServices') 'start.ps1 must detect failed workers and trigger immediate shutdown (fail-fast).'
+Assert-True ($content -match 'logs\\hmht\.log') 'start.ps1 should dump tail of Java log file on failure.'
 
 Write-Host '[PASS] start.ps1 script-level checks passed.' -ForegroundColor Green

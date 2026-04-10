@@ -20,176 +20,215 @@ import org.springframework.boot.test.system.OutputCaptureExtension;
 
 import ww.wangnong.config.RunMode;
 import ww.wangnong.config.RunModeHolder;
+import ww.wangnong.mock.SimNodeSimulator;
 import ww.wangnong.mqtt.MqttSubscriptionRegistry;
 import ww.wangnong.mqtt.PahoMqttService;
+import ww.wangnong.repository.NodeEquipmentRepository;
+import ww.wangnong.repository.NodeRepository;
+import ww.wangnong.repository.NodeSensorRepository;
 import ww.wangnong.service.AlertService;
 
 @ExtendWith({ MockitoExtension.class, OutputCaptureExtension.class })
 class MqttBridgeTest {
 
-    private static final int BRIDGE_QOS = 1;
-    private static final String PY_TELEMETRY = "/agri/device/+/telemetry";
-    private static final String PY_AI_ALERT = "/agri/ai_vision/alert";
-    private static final String PY_ACK = "/agri/device/+/ack";
-    private static final String HW_TELEMETRY = "/hmht/device/+/telemetry";
-    private static final String HW_CAPABILITY = "/hmht/device/+/capability";
-    private static final String HW_ACK = "/hmht/device/+/ack";
-    private static final String APP_COMMAND = "/wangnong_2026/node/+/command";
+        private static final int BRIDGE_QOS = 1;
+        private static final String PY_TELEMETRY = "/agri/device/+/telemetry";
+        private static final String PY_AI_ALERT = "/agri/ai_vision/alert";
+        private static final String PY_ACK = "/agri/device/+/ack";
+        private static final String HW_TELEMETRY = "/hmht/device/+/telemetry";
+        private static final String HW_CAPABILITY = "/hmht/device/+/capability";
+        private static final String HW_ACK = "/hmht/device/+/ack";
+        private static final String APP_COMMAND = "/wangnong_2026/node/+/command";
 
-    @Mock
-    private PahoMqttService mqttService;
+        @Mock
+        private PahoMqttService mqttService;
 
-    @Mock
-    private AlertService alertService;
+        @Mock
+        private AlertService alertService;
 
-    @Mock
-    private InfluxTelemetryWriter influxTelemetryWriter;
+        @Mock
+        private InfluxTelemetryWriter influxTelemetryWriter;
 
-    @Mock
-    private MqttSubscriptionRegistry subscriptionRegistry;
+        @Mock
+        private MqttSubscriptionRegistry subscriptionRegistry;
 
-    @Mock
-    private ProtocolPersistenceService protocolPersistenceService;
+        @Mock
+        private ProtocolPersistenceService protocolPersistenceService;
 
-    @Mock
-    private RunModeHolder runModeHolder;
+        @Mock
+        private RunModeHolder runModeHolder;
 
-    @Test
-    void init_bridgeMode_registersPythonRoutesOnly() {
-        when(runModeHolder.isPythonRouteEnabled()).thenReturn(true);
-        when(runModeHolder.isHardwareRouteEnabled()).thenReturn(false);
-        when(runModeHolder.getMode()).thenReturn(RunMode.BRIDGE);
+        @Mock
+        private TelemetryAlertChecker alertChecker;
 
-        MqttBridge bridge = new MqttBridge(
-                mqttService,
-                alertService,
-                influxTelemetryWriter,
-                subscriptionRegistry,
-                protocolPersistenceService,
-                runModeHolder);
+        @Mock
+        private SimNodeSimulator simNodeSimulator;
 
-        bridge.init();
+        @Mock
+        private NodeRepository nodeRepository;
 
-        verify(subscriptionRegistry).register(eq(PY_TELEMETRY), eq(BRIDGE_QOS), any());
-        verify(subscriptionRegistry).register(eq(PY_AI_ALERT), eq(BRIDGE_QOS), any());
-        verify(subscriptionRegistry).register(eq(PY_ACK), eq(BRIDGE_QOS), any());
-        verify(subscriptionRegistry).register(eq(APP_COMMAND), eq(BRIDGE_QOS), any());
+        @Mock
+        private NodeSensorRepository nodeSensorRepository;
 
-        verify(subscriptionRegistry, never()).register(eq(HW_TELEMETRY), eq(BRIDGE_QOS), any());
-        verify(subscriptionRegistry, never()).register(eq(HW_CAPABILITY), eq(BRIDGE_QOS), any());
-        verify(subscriptionRegistry, never()).register(eq(HW_ACK), eq(BRIDGE_QOS), any());
+        @Mock
+        private NodeEquipmentRepository nodeEquipmentRepository;
 
-        verify(subscriptionRegistry).bindAll(mqttService);
-        verifyNoInteractions(alertService, influxTelemetryWriter, protocolPersistenceService);
-    }
+        @Test
+        void init_bridgeMode_registersPythonRoutesOnly() {
+                when(runModeHolder.isPythonRouteEnabled()).thenReturn(true);
+                when(runModeHolder.isHardwareRouteEnabled()).thenReturn(false);
+                when(runModeHolder.getMode()).thenReturn(RunMode.BRIDGE);
 
-    @Test
-    void init_hardwareMode_registersHardwareRoutesOnly() {
-        when(runModeHolder.isPythonRouteEnabled()).thenReturn(false);
-        when(runModeHolder.isHardwareRouteEnabled()).thenReturn(true);
-        when(runModeHolder.getMode()).thenReturn(RunMode.HARDWARE);
+                MqttBridge bridge = new MqttBridge(
+                                mqttService,
+                                alertService,
+                                influxTelemetryWriter,
+                                subscriptionRegistry,
+                                protocolPersistenceService,
+                                runModeHolder,
+                                alertChecker,
+                                simNodeSimulator,
+                                nodeRepository,
+                                nodeSensorRepository,
+                                nodeEquipmentRepository);
 
-        MqttBridge bridge = new MqttBridge(
-                mqttService,
-                alertService,
-                influxTelemetryWriter,
-                subscriptionRegistry,
-                protocolPersistenceService,
-                runModeHolder);
+                bridge.init();
 
-        bridge.init();
+                verify(subscriptionRegistry).register(eq(PY_TELEMETRY), eq(BRIDGE_QOS), any());
+                verify(subscriptionRegistry).register(eq(PY_AI_ALERT), eq(BRIDGE_QOS), any());
+                verify(subscriptionRegistry).register(eq(PY_ACK), eq(BRIDGE_QOS), any());
+                verify(subscriptionRegistry).register(eq(APP_COMMAND), eq(BRIDGE_QOS), any());
 
-        verify(subscriptionRegistry).register(eq(HW_TELEMETRY), eq(BRIDGE_QOS), any());
-        verify(subscriptionRegistry).register(eq(HW_CAPABILITY), eq(BRIDGE_QOS), any());
-        verify(subscriptionRegistry).register(eq(HW_ACK), eq(BRIDGE_QOS), any());
-        verify(subscriptionRegistry).register(eq(APP_COMMAND), eq(BRIDGE_QOS), any());
+                verify(subscriptionRegistry, never()).register(eq(HW_TELEMETRY), eq(BRIDGE_QOS), any());
+                verify(subscriptionRegistry, never()).register(eq(HW_CAPABILITY), eq(BRIDGE_QOS), any());
+                verify(subscriptionRegistry, never()).register(eq(HW_ACK), eq(BRIDGE_QOS), any());
 
-        verify(subscriptionRegistry, never()).register(eq(PY_TELEMETRY), eq(BRIDGE_QOS), any());
-        verify(subscriptionRegistry, never()).register(eq(PY_AI_ALERT), eq(BRIDGE_QOS), any());
-        verify(subscriptionRegistry, never()).register(eq(PY_ACK), eq(BRIDGE_QOS), any());
+                verify(subscriptionRegistry).bindAll(mqttService);
+                verifyNoInteractions(alertService, influxTelemetryWriter, protocolPersistenceService);
+        }
 
-        verify(subscriptionRegistry).bindAll(mqttService);
-        verifyNoInteractions(alertService, influxTelemetryWriter, protocolPersistenceService);
-    }
+        @Test
+        void init_hardwareMode_registersHardwareRoutesOnly() {
+                when(runModeHolder.isPythonRouteEnabled()).thenReturn(false);
+                when(runModeHolder.isHardwareRouteEnabled()).thenReturn(true);
+                when(runModeHolder.getMode()).thenReturn(RunMode.HARDWARE);
 
-    @Test
-    void init_fullMode_registersPythonAndHardwareRoutes() {
-        when(runModeHolder.isPythonRouteEnabled()).thenReturn(true);
-        when(runModeHolder.isHardwareRouteEnabled()).thenReturn(true);
-        when(runModeHolder.getMode()).thenReturn(RunMode.FULL);
+                MqttBridge bridge = new MqttBridge(
+                                mqttService,
+                                alertService,
+                                influxTelemetryWriter,
+                                subscriptionRegistry,
+                                protocolPersistenceService,
+                                runModeHolder,
+                                alertChecker,
+                                simNodeSimulator,
+                                nodeRepository,
+                                nodeSensorRepository,
+                                nodeEquipmentRepository);
 
-        MqttBridge bridge = new MqttBridge(
-                mqttService,
-                alertService,
-                influxTelemetryWriter,
-                subscriptionRegistry,
-                protocolPersistenceService,
-                runModeHolder);
+                bridge.init();
 
-        bridge.init();
+                verify(subscriptionRegistry).register(eq(HW_TELEMETRY), eq(BRIDGE_QOS), any());
+                verify(subscriptionRegistry).register(eq(HW_CAPABILITY), eq(BRIDGE_QOS), any());
+                verify(subscriptionRegistry).register(eq(HW_ACK), eq(BRIDGE_QOS), any());
+                verify(subscriptionRegistry).register(eq(APP_COMMAND), eq(BRIDGE_QOS), any());
 
-        verify(subscriptionRegistry).register(eq(PY_TELEMETRY), eq(BRIDGE_QOS), any());
-        verify(subscriptionRegistry).register(eq(PY_AI_ALERT), eq(BRIDGE_QOS), any());
-        verify(subscriptionRegistry).register(eq(PY_ACK), eq(BRIDGE_QOS), any());
-        verify(subscriptionRegistry).register(eq(HW_TELEMETRY), eq(BRIDGE_QOS), any());
-        verify(subscriptionRegistry).register(eq(HW_CAPABILITY), eq(BRIDGE_QOS), any());
-        verify(subscriptionRegistry).register(eq(HW_ACK), eq(BRIDGE_QOS), any());
-        verify(subscriptionRegistry).register(eq(APP_COMMAND), eq(BRIDGE_QOS), any());
+                verify(subscriptionRegistry, never()).register(eq(PY_TELEMETRY), eq(BRIDGE_QOS), any());
+                verify(subscriptionRegistry, never()).register(eq(PY_AI_ALERT), eq(BRIDGE_QOS), any());
+                verify(subscriptionRegistry, never()).register(eq(PY_ACK), eq(BRIDGE_QOS), any());
 
-        verify(subscriptionRegistry).bindAll(mqttService);
-        verifyNoInteractions(alertService, influxTelemetryWriter, protocolPersistenceService);
-    }
+                verify(subscriptionRegistry).bindAll(mqttService);
+                verifyNoInteractions(alertService, influxTelemetryWriter, protocolPersistenceService);
+        }
 
-    @Test
-    void hardwareInboundMessages_allKinds_logsRawMqttEnvelope(CapturedOutput output) {
-        when(runModeHolder.isPythonRouteEnabled()).thenReturn(false);
-        when(runModeHolder.isHardwareRouteEnabled()).thenReturn(true);
-        when(runModeHolder.getMode()).thenReturn(RunMode.HARDWARE);
+        @Test
+        void init_fullMode_registersPythonAndHardwareRoutes() {
+                when(runModeHolder.isPythonRouteEnabled()).thenReturn(true);
+                when(runModeHolder.isHardwareRouteEnabled()).thenReturn(true);
+                when(runModeHolder.getMode()).thenReturn(RunMode.FULL);
 
-        MqttBridge bridge = new MqttBridge(
-                mqttService,
-                alertService,
-                influxTelemetryWriter,
-                subscriptionRegistry,
-                protocolPersistenceService,
-                runModeHolder);
+                MqttBridge bridge = new MqttBridge(
+                                mqttService,
+                                alertService,
+                                influxTelemetryWriter,
+                                subscriptionRegistry,
+                                protocolPersistenceService,
+                                runModeHolder,
+                                alertChecker,
+                                simNodeSimulator,
+                                nodeRepository,
+                                nodeSensorRepository,
+                                nodeEquipmentRepository);
 
-        bridge.init();
+                bridge.init();
 
-        Consumer<PahoMqttService.InboundMessage> telemetryHandler = captureHandler(HW_TELEMETRY);
-        Consumer<PahoMqttService.InboundMessage> capabilityHandler = captureHandler(HW_CAPABILITY);
-        Consumer<PahoMqttService.InboundMessage> ackHandler = captureHandler(HW_ACK);
+                verify(subscriptionRegistry).register(eq(PY_TELEMETRY), eq(BRIDGE_QOS), any());
+                verify(subscriptionRegistry).register(eq(PY_AI_ALERT), eq(BRIDGE_QOS), any());
+                verify(subscriptionRegistry).register(eq(PY_ACK), eq(BRIDGE_QOS), any());
+                verify(subscriptionRegistry).register(eq(HW_TELEMETRY), eq(BRIDGE_QOS), any());
+                verify(subscriptionRegistry).register(eq(HW_CAPABILITY), eq(BRIDGE_QOS), any());
+                verify(subscriptionRegistry).register(eq(HW_ACK), eq(BRIDGE_QOS), any());
+                verify(subscriptionRegistry).register(eq(APP_COMMAND), eq(BRIDGE_QOS), any());
 
-        telemetryHandler.accept(new PahoMqttService.InboundMessage(
-                "/hmht/device/N01/telemetry",
-                "{\"device_id\":\"N01\",\"protocol_version\":\"2.0\",\"trace_id\":\"trace-tel\",\"timestamp\":1765000111200,\"payload\":{\"sensors\":{\"air_temp\":{\"value\":25.5}},\"equipments\":{\"water_pump\":{\"state\":true}},\"mode\":\"auto\"}}",
-                1,
-                false));
+                verify(subscriptionRegistry).bindAll(mqttService);
+                verifyNoInteractions(alertService, influxTelemetryWriter, protocolPersistenceService);
+        }
 
-        capabilityHandler.accept(new PahoMqttService.InboundMessage(
-                "/hmht/device/N01/capability",
-                "{\"device_id\":\"N01\",\"protocol_version\":\"2.0\",\"trace_id\":\"trace-cap\",\"timestamp\":1765000111200,\"payload\":{\"capability_version\":\"2.0\",\"sensors\":{},\"equipments\":{}}}",
-                1,
-                false));
+        @Test
+        void hardwareInboundMessages_allKinds_logsRawMqttEnvelope(CapturedOutput output) {
+                when(runModeHolder.isPythonRouteEnabled()).thenReturn(false);
+                when(runModeHolder.isHardwareRouteEnabled()).thenReturn(true);
+                when(runModeHolder.getMode()).thenReturn(RunMode.HARDWARE);
 
-        ackHandler.accept(new PahoMqttService.InboundMessage(
-                "/hmht/device/N01/ack",
-                "{\"device_id\":\"N01\",\"protocol_version\":\"2.0\",\"trace_id\":\"trace-ack\",\"payload\":{\"command_id\":\"CMD-1\",\"status\":\"executed\",\"ack_code\":0,\"ack_message\":\"ok\",\"acked_at\":1765000111200}}",
-                1,
-                false));
+                MqttBridge bridge = new MqttBridge(
+                                mqttService,
+                                alertService,
+                                influxTelemetryWriter,
+                                subscriptionRegistry,
+                                protocolPersistenceService,
+                                runModeHolder,
+                                alertChecker,
+                                simNodeSimulator,
+                                nodeRepository,
+                                nodeSensorRepository,
+                                nodeEquipmentRepository);
 
-        assertThat(output.getAll()).contains("[Bridge][HW-IN]");
-        assertThat(output.getAll()).contains("/hmht/device/N01/telemetry");
-        assertThat(output.getAll()).contains("/hmht/device/N01/capability");
-        assertThat(output.getAll()).contains("/hmht/device/N01/ack");
-        assertThat(output.getAll()).contains("qos=1");
-        assertThat(output.getAll()).contains("retained=false");
-    }
+                bridge.init();
 
-    @SuppressWarnings({ "rawtypes", "unchecked" })
-    private Consumer<PahoMqttService.InboundMessage> captureHandler(String topicFilter) {
-        ArgumentCaptor<Consumer> captor = ArgumentCaptor.forClass(Consumer.class);
-        verify(subscriptionRegistry).register(eq(topicFilter), eq(BRIDGE_QOS), captor.capture());
-        return (Consumer<PahoMqttService.InboundMessage>) captor.getValue();
-    }
+                Consumer<PahoMqttService.InboundMessage> telemetryHandler = captureHandler(HW_TELEMETRY);
+                Consumer<PahoMqttService.InboundMessage> capabilityHandler = captureHandler(HW_CAPABILITY);
+                Consumer<PahoMqttService.InboundMessage> ackHandler = captureHandler(HW_ACK);
+
+                telemetryHandler.accept(new PahoMqttService.InboundMessage(
+                                "/hmht/device/N01/telemetry",
+                                "{\"device_id\":\"N01\",\"protocol_version\":\"2.0\",\"trace_id\":\"trace-tel\",\"timestamp\":1765000111200,\"payload\":{\"sensors\":{\"air_temp\":{\"value\":25.5}},\"equipments\":{\"water_pump\":{\"state\":true}},\"mode\":\"auto\"}}",
+                                1,
+                                false));
+
+                capabilityHandler.accept(new PahoMqttService.InboundMessage(
+                                "/hmht/device/N01/capability",
+                                "{\"device_id\":\"N01\",\"protocol_version\":\"2.0\",\"trace_id\":\"trace-cap\",\"timestamp\":1765000111200,\"payload\":{\"capability_version\":\"2.0\",\"sensors\":{},\"equipments\":{}}}",
+                                1,
+                                false));
+
+                ackHandler.accept(new PahoMqttService.InboundMessage(
+                                "/hmht/device/N01/ack",
+                                "{\"device_id\":\"N01\",\"protocol_version\":\"2.0\",\"trace_id\":\"trace-ack\",\"payload\":{\"command_id\":\"CMD-1\",\"status\":\"executed\",\"ack_code\":0,\"ack_message\":\"ok\",\"acked_at\":1765000111200}}",
+                                1,
+                                false));
+
+                assertThat(output.getAll()).contains("[Bridge][HW-IN]");
+                assertThat(output.getAll()).contains("/hmht/device/N01/telemetry");
+                assertThat(output.getAll()).contains("/hmht/device/N01/capability");
+                assertThat(output.getAll()).contains("/hmht/device/N01/ack");
+                assertThat(output.getAll()).contains("qos=1");
+                assertThat(output.getAll()).contains("retained=false");
+        }
+
+        @SuppressWarnings({ "rawtypes", "unchecked" })
+        private Consumer<PahoMqttService.InboundMessage> captureHandler(String topicFilter) {
+                ArgumentCaptor<Consumer> captor = ArgumentCaptor.forClass(Consumer.class);
+                verify(subscriptionRegistry).register(eq(topicFilter), eq(BRIDGE_QOS), captor.capture());
+                return (Consumer<PahoMqttService.InboundMessage>) captor.getValue();
+        }
 }

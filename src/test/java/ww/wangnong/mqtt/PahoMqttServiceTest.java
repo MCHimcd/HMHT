@@ -24,8 +24,12 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.boot.test.system.CapturedOutput;
+import org.springframework.boot.test.system.OutputCaptureExtension;
 
-@ExtendWith(MockitoExtension.class)
+import ww.wangnong.config.RunMode;
+
+@ExtendWith({ MockitoExtension.class, OutputCaptureExtension.class })
 class PahoMqttServiceTest {
 
     @Mock
@@ -147,5 +151,22 @@ class PahoMqttServiceTest {
         service.publish("/hardware/status", "ok", 1, false);
 
         verify(mqttClient).publish(eq("/hardware/status"), any());
+    }
+
+    @Test
+    void publish_hardwareMode_logsPayloadToConsole(CapturedOutput output) throws Exception {
+        when(mqttClient.connect(any(MqttConnectOptions.class))).thenReturn(connectToken);
+        when(mqttClient.isConnected()).thenReturn(true);
+        when(mqttClient.publish(anyString(), any())).thenReturn(deliveryToken);
+
+        PahoMqttService service = new PahoMqttService(properties, RunMode.HARDWARE, (uri, clientId) -> mqttClient);
+        service.connect();
+
+        service.publish("/hmht/device/N01/command", "{\"command\":\"pump_on\"}", 1, false);
+
+        assertThat(output.getOut())
+                .contains("[MQTT][OUT]")
+                .contains("/hmht/device/N01/command")
+                .contains("{\"command\":\"pump_on\"}");
     }
 }

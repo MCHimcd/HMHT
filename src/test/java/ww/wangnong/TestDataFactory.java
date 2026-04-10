@@ -4,7 +4,6 @@ import java.time.LocalDateTime;
 
 import ww.wangnong.entity.Alert;
 import ww.wangnong.entity.ChatMessage;
-import ww.wangnong.entity.CommandLog;
 import ww.wangnong.entity.EquipmentType;
 import ww.wangnong.entity.Node;
 import ww.wangnong.entity.NodeEquipment;
@@ -156,17 +155,6 @@ public final class TestDataFactory {
         vc.setExpiresAt(LocalDateTime.now().plusMinutes(5));
         vc.setUsed(false);
         return vc;
-    }
-
-    // ── CommandLog ──
-
-    public static CommandLog commandLog(String nodeId, String command) {
-        CommandLog cl = new CommandLog();
-        cl.setNodeId(nodeId);
-        cl.setTargetDevice("water_pump");
-        cl.setCommand(command);
-        cl.setSource("app");
-        return cl;
     }
 
     // ── ChatMessage ──

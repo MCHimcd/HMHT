@@ -181,8 +181,8 @@ class TelemetryTranslatorTest {
 
         assertThat(env.get("temperature")).isEqualTo(26.4);
         assertThat(env.get("custom_sensor_x")).isEqualTo(88.2);
-        assertThat(equipment.get("water_pump")).isEqualTo("on");
-        assertThat(equipment.get("custom_device_y")).isEqualTo("standby");
+        assertThat(equipment.get("water_pump")).isEqualTo(true);
+        assertThat(equipment.get("custom_device_y")).isEqualTo(false);
         assertThat(data.get("mode")).isEqualTo("manual");
         assertThat(data.get("protocol_version")).isEqualTo("2.0");
         assertThat(data.get("trace_id")).isEqualTo("trace-1");

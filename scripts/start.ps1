@@ -41,7 +41,7 @@ param(
     [ValidateSet("mock", "bridge", "hardware", "full")]
     [string]$Mode = "mock",
     [string]$PythonDir = "d:\DevEcoStudioProjects\agri\agri_system\backend",
-    [string]$JavaDir = "d:\JetBrainsProjects\HMHT",
+    [string]$JavaDir = "",
     [int]$AgriChatPort = 5000,
     [string]$InfluxDir = "C:\Users\mc_hi\Downloads\influxdb3-core-3.8.3-windows_amd64",
     [string]$InfluxToken = "",
@@ -202,7 +202,7 @@ function Stop-ProcessTreeGracefully {
     }
 
     try {
-        & taskkill /PID $ProcessId /T | Out-Null
+        & taskkill /PID $ProcessId /T 2>&1 | Out-Null
     }
     catch {
         Write-Verbose "taskkill soft failed for PID ${ProcessId}: $($_.Exception.Message)"
@@ -217,7 +217,7 @@ function Stop-ProcessTreeGracefully {
     }
 
     try {
-        & taskkill /PID $ProcessId /T /F | Out-Null
+        & taskkill /PID $ProcessId /T /F 2>&1 | Out-Null
     }
     catch {
         Write-Verbose "taskkill force failed for PID ${ProcessId}: $($_.Exception.Message)"
@@ -567,9 +567,11 @@ function Invoke-Worker {
         }
 
         $exitCode = if ($childProc.HasExited) { $childProc.ExitCode } else { 1 }
+        if ($null -eq $exitCode) { $exitCode = 1 }
         $endState = if ($exitCode -eq 0) { "Stopped" } else { "Failed" }
+        $endMessage = if ($exitCode -ne 0) { "$message (exit $exitCode)" } else { $message }
 
-        Write-WorkerStatus -StatusFile $statusFile -Name $WorkerName -Kind $WorkerKind -State $endState -ShellPid $PID -ChildPid $childProc.Id -ExitCode $exitCode -Message $message
+        Write-WorkerStatus -StatusFile $statusFile -Name $WorkerName -Kind $WorkerKind -State $endState -ShellPid $PID -ChildPid $childProc.Id -ExitCode $exitCode -Message $endMessage
         return $exitCode
     }
     catch {
@@ -592,6 +594,11 @@ Set-Utf8Console
 $wtCommand = Get-Command "wt" -ErrorAction SilentlyContinue
 if ($null -eq $wtCommand) {
     throw "未检测到 Windows Terminal (wt.exe)。请安装后使用 start.ps1。"
+}
+
+# Auto-detect JavaDir from script location if not explicitly provided
+if ([string]::IsNullOrWhiteSpace($JavaDir)) {
+    $JavaDir = (Resolve-Path (Join-Path $PSScriptRoot "..")).Path
 }
 
 if (-not (Test-Path $JavaDir)) {
@@ -777,13 +784,40 @@ try {
     while ($true) {
         Render-ServiceStatusTable -Services $services -Mode $Mode -WindowName $windowName -SessionDir $sessionDir -StopSignalFile $stopSignalFile
 
+        # Fail-fast: detect any failed worker and immediately trigger shutdown
+        $failedServices = @()
         $allDone = $true
         foreach ($svc in $services) {
             $st = Read-ServiceStatus -Service $svc
+            if ($st.state -eq "Failed") {
+                $failedServices += $st
+            }
             if ($st.state -in @("Starting", "Running", "Stopping", "Unknown")) {
                 $allDone = $false
-                break
             }
+        }
+
+        if ($failedServices.Count -gt 0) {
+            Write-Host ""
+            Write-Host "==================== 服务启动失败 ====================" -ForegroundColor Red
+            foreach ($f in $failedServices) {
+                Write-Host "  [$($f.name)] ExitCode=$($f.exitCode)  $($f.message)" -ForegroundColor Red
+            }
+            Write-Host "======================================================" -ForegroundColor Red
+
+            # Dump tail of Java log if available
+            foreach ($f in $failedServices) {
+                if ($f.kind -eq "java") {
+                    $logFile = Join-Path $JavaDir "logs\hmht.log"
+                    if (Test-Path $logFile) {
+                        Write-Host ""
+                        Write-Host "--- [$($f.name)] 最近日志 ($logFile) ---" -ForegroundColor Yellow
+                        Get-Content -Path $logFile -Tail 40 -Encoding UTF8 | ForEach-Object { Write-Host $_ }
+                        Write-Host "--- 日志结束 ---" -ForegroundColor Yellow
+                    }
+                }
+            }
+            break
         }
 
         if ($allDone) {

@@ -22,6 +22,8 @@ import org.springframework.stereotype.Service;
 
 import jakarta.annotation.PostConstruct;
 import jakarta.annotation.PreDestroy;
+import ww.wangnong.config.RunMode;
+import ww.wangnong.config.RunModeHolder;
 
 @Service
 public class PahoMqttService {
@@ -29,6 +31,7 @@ public class PahoMqttService {
     private static final Logger log = LoggerFactory.getLogger(PahoMqttService.class);
 
     private final MqttProperties properties;
+    private final RunMode runMode;
     private final MqttClientFactory clientFactory;
 
     private final Map<String, SubscriptionBinding> subscriptions = new ConcurrentHashMap<>();
@@ -40,12 +43,20 @@ public class PahoMqttService {
     private volatile String lastError;
 
     @Autowired
-    public PahoMqttService(MqttProperties properties) {
-        this(properties, (serverUri, clientId) -> new MqttAsyncClient(serverUri, clientId, new MemoryPersistence()));
+    public PahoMqttService(MqttProperties properties, RunModeHolder runModeHolder) {
+        this(
+                properties,
+                runModeHolder == null ? RunMode.MOCK : runModeHolder.getMode(),
+                (serverUri, clientId) -> new MqttAsyncClient(serverUri, clientId, new MemoryPersistence()));
     }
 
     PahoMqttService(MqttProperties properties, MqttClientFactory clientFactory) {
+        this(properties, RunMode.MOCK, clientFactory);
+    }
+
+    PahoMqttService(MqttProperties properties, RunMode runMode, MqttClientFactory clientFactory) {
         this.properties = Objects.requireNonNull(properties, "properties cannot be null");
+        this.runMode = runMode == null ? RunMode.MOCK : runMode;
         this.clientFactory = Objects.requireNonNull(clientFactory, "clientFactory cannot be null");
     }
 
@@ -75,6 +86,7 @@ public class PahoMqttService {
             options.setCleanSession(properties.isCleanSession());
             options.setConnectionTimeout(properties.getConnectionTimeoutSeconds());
             options.setKeepAliveInterval(properties.getKeepAliveIntervalSeconds());
+            options.setMaxInflight(50);
 
             if (properties.getUsername() != null && !properties.getUsername().isBlank()) {
                 options.setUserName(properties.getUsername());
@@ -131,7 +143,17 @@ public class PahoMqttService {
 
             IMqttDeliveryToken token = client.publish(targetTopic, message);
             token.waitForCompletion();
-            log.debug("MQTT message published: topic={}, qos={}, retained={}", targetTopic, normalizedQos, retained);
+            if (shouldLogOutboundToConsole()) {
+                log.info(
+                        "[MQTT][OUT] topic={}, qos={}, retained={}, payload={}",
+                        targetTopic,
+                        normalizedQos,
+                        retained,
+                        payload);
+            } else {
+                log.debug("MQTT message published: topic={}, qos={}, retained={}", targetTopic, normalizedQos,
+                        retained);
+            }
         } catch (MqttException e) {
             throw new IllegalStateException("Failed to publish MQTT message.", e);
         }
@@ -285,6 +307,10 @@ public class PahoMqttService {
         state = ConnectionState.CONNECTED;
         lastConnectedAt = Instant.now();
         lastError = null;
+    }
+
+    private boolean shouldLogOutboundToConsole() {
+        return runMode == RunMode.HARDWARE;
     }
 
     private static String describeError(Throwable throwable) {

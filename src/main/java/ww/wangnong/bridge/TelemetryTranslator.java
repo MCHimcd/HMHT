@@ -130,7 +130,7 @@ public final class TelemetryTranslator {
             for (var entry : ((Map<String, Object>) equipments).entrySet()) {
                 Object normalized = unwrapValue(entry.getValue(), "state");
                 if (normalized != null) {
-                    appEquipment.put(entry.getKey(), normalized);
+                    appEquipment.put(entry.getKey(), toEquipmentBoolean(normalized));
                 }
             }
             if (!appEquipment.isEmpty()) {
@@ -196,5 +196,22 @@ public final class TelemetryTranslator {
             return nested != null ? nested : valueOrMap;
         }
         return valueOrMap;
+    }
+
+    /**
+     * Convert equipment state to boolean.
+     * Handles string "on"/"off", boolean, and numeric values.
+     */
+    private static boolean toEquipmentBoolean(Object value) {
+        if (value instanceof Boolean b) {
+            return b;
+        }
+        if (value instanceof String s) {
+            return "on".equalsIgnoreCase(s.trim());
+        }
+        if (value instanceof Number n) {
+            return n.intValue() != 0;
+        }
+        return false;
     }
 }

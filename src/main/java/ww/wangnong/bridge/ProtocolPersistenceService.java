@@ -13,6 +13,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import ww.wangnong.config.condition.ConditionalOnBridgeMode;
 import ww.wangnong.entity.CommandAck;
@@ -23,7 +24,12 @@ import ww.wangnong.entity.DeviceCapability;
 import ww.wangnong.entity.DeviceProfile;
 import ww.wangnong.entity.DeviceShadow;
 import ww.wangnong.entity.IngestAudit;
+import ww.wangnong.entity.EquipmentType;
 import ww.wangnong.entity.IngestDeadletter;
+import ww.wangnong.entity.Node;
+import ww.wangnong.entity.NodeEquipment;
+import ww.wangnong.entity.NodeSensor;
+import ww.wangnong.entity.SensorType;
 import ww.wangnong.repository.CapabilityEquipmentRepository;
 import ww.wangnong.repository.CapabilitySensorRepository;
 import ww.wangnong.repository.CommandAckRepository;
@@ -31,8 +37,13 @@ import ww.wangnong.repository.CommandRequestRepository;
 import ww.wangnong.repository.DeviceCapabilityRepository;
 import ww.wangnong.repository.DeviceProfileRepository;
 import ww.wangnong.repository.DeviceShadowRepository;
+import ww.wangnong.repository.EquipmentTypeRepository;
 import ww.wangnong.repository.IngestAuditRepository;
 import ww.wangnong.repository.IngestDeadletterRepository;
+import ww.wangnong.repository.NodeEquipmentRepository;
+import ww.wangnong.repository.NodeRepository;
+import ww.wangnong.repository.NodeSensorRepository;
+import ww.wangnong.repository.SensorTypeRepository;
 
 /**
  * 协议控制面持久化服务，处理命令、ACK、能力、影子等数据的持久化。
@@ -56,6 +67,11 @@ public class ProtocolPersistenceService {
     private final DeviceCapabilityRepository deviceCapabilityRepository;
     private final CapabilitySensorRepository capabilitySensorRepository;
     private final CapabilityEquipmentRepository capabilityEquipmentRepository;
+    private final NodeRepository nodeRepository;
+    private final SensorTypeRepository sensorTypeRepository;
+    private final EquipmentTypeRepository equipmentTypeRepository;
+    private final NodeSensorRepository nodeSensorRepository;
+    private final NodeEquipmentRepository nodeEquipmentRepository;
 
     public ProtocolPersistenceService(
             CommandRequestRepository commandRequestRepository,
@@ -66,7 +82,12 @@ public class ProtocolPersistenceService {
             DeviceProfileRepository deviceProfileRepository,
             DeviceCapabilityRepository deviceCapabilityRepository,
             CapabilitySensorRepository capabilitySensorRepository,
-            CapabilityEquipmentRepository capabilityEquipmentRepository) {
+            CapabilityEquipmentRepository capabilityEquipmentRepository,
+            NodeRepository nodeRepository,
+            SensorTypeRepository sensorTypeRepository,
+            EquipmentTypeRepository equipmentTypeRepository,
+            NodeSensorRepository nodeSensorRepository,
+            NodeEquipmentRepository nodeEquipmentRepository) {
         this.commandRequestRepository = commandRequestRepository;
         this.commandAckRepository = commandAckRepository;
         this.ingestAuditRepository = ingestAuditRepository;
@@ -76,6 +97,11 @@ public class ProtocolPersistenceService {
         this.deviceCapabilityRepository = deviceCapabilityRepository;
         this.capabilitySensorRepository = capabilitySensorRepository;
         this.capabilityEquipmentRepository = capabilityEquipmentRepository;
+        this.nodeRepository = nodeRepository;
+        this.sensorTypeRepository = sensorTypeRepository;
+        this.equipmentTypeRepository = equipmentTypeRepository;
+        this.nodeSensorRepository = nodeSensorRepository;
+        this.nodeEquipmentRepository = nodeEquipmentRepository;
     }
 
     public void recordCommandDispatched(
@@ -204,6 +230,7 @@ public class ProtocolPersistenceService {
     }
 
     @SuppressWarnings("unchecked")
+    @Transactional
     public void recordCapabilitySnapshot(
             String deviceId,
             String capabilityVersion,
@@ -224,6 +251,9 @@ public class ProtocolPersistenceService {
             profile.setOnline(true);
             profile.setLastSeenAt(reportedAt);
             deviceProfileRepository.save(profile);
+
+            // ── Auto-register Node (硬件自动注册到前端设备列表) ──
+            syncNodeFromCapability(safeDeviceId, sensors, equipments);
 
             DeviceCapability capability = new DeviceCapability();
             capability.setDeviceId(safeDeviceId);
@@ -300,6 +330,95 @@ public class ProtocolPersistenceService {
             return LocalDateTime.now();
         }
         return LocalDateTime.ofInstant(Instant.ofEpochMilli(epochMs), ZoneId.systemDefault());
+    }
+
+    // ── 硬件自动注册：capability → Node + SensorType + EquipmentType + 关联表 ──
+
+    @SuppressWarnings("unchecked")
+    private void syncNodeFromCapability(String deviceId,
+            Map<String, Object> sensors, Map<String, Object> equipments) {
+        // 1) 自动创建/更新 Node（user_id 留空，待管理员绑定）
+        Node node = nodeRepository.findByNodeId(deviceId).orElseGet(() -> {
+            Node n = new Node();
+            n.setNodeId(deviceId);
+            n.setNodeName(deviceId);
+            log.info("[ProtocolPersistence] Auto-registered new node: {}", deviceId);
+            return n;
+        });
+        node.setOnline(true);
+        nodeRepository.save(node);
+
+        // 2) 同步全局 SensorType 字典 + node_sensor 关联
+        for (var entry : sensors.entrySet()) {
+            String rawKey = entry.getKey();
+            String canonicalKey = toAppSensorKey(rawKey);
+            if (canonicalKey.isBlank()) {
+                continue;
+            }
+            sensorTypeRepository.findBySensorKey(canonicalKey).orElseGet(() -> {
+                SensorType st = new SensorType();
+                st.setSensorKey(canonicalKey);
+                st.setName(canonicalKey);
+                Object raw = entry.getValue();
+                if (raw instanceof Map<?, ?> m) {
+                    Map<String, Object> d = (Map<String, Object>) m;
+                    st.setUnit(str(d.get("unit")));
+                }
+                return sensorTypeRepository.save(st);
+            });
+            nodeSensorRepository.findByNodeIdAndSensorKey(deviceId, canonicalKey).orElseGet(() -> {
+                NodeSensor ns = new NodeSensor();
+                ns.setNodeId(deviceId);
+                ns.setSensorKey(canonicalKey);
+                return nodeSensorRepository.save(ns);
+            });
+        }
+
+        // 3) 同步全局 EquipmentType 字典 + node_equipment 关联
+        for (var entry : equipments.entrySet()) {
+            String key = entry.getKey();
+            if (key == null || key.isBlank()) {
+                continue;
+            }
+            Object raw = entry.getValue();
+            equipmentTypeRepository.findByEquipmentKey(key).orElseGet(() -> {
+                EquipmentType et = new EquipmentType();
+                et.setEquipmentKey(key);
+                et.setName(key);
+                if (raw instanceof Map<?, ?> m) {
+                    Map<String, Object> d = (Map<String, Object>) m;
+                    et.setControllable(toBoolean(d.get("controllable"), true));
+                }
+                return equipmentTypeRepository.save(et);
+            });
+            boolean exists = nodeEquipmentRepository.findByNodeId(deviceId).stream()
+                    .anyMatch(ne -> key.equals(ne.getEquipmentKey()));
+            if (!exists) {
+                NodeEquipment ne = new NodeEquipment();
+                ne.setNodeId(deviceId);
+                ne.setEquipmentKey(key);
+                nodeEquipmentRepository.save(ne);
+            }
+        }
+    }
+
+    private static String toAppSensorKey(String sensorKey) {
+        if (sensorKey == null || sensorKey.isBlank()) {
+            return "";
+        }
+        return switch (sensorKey) {
+            case "air_temp" -> "temperature";
+            case "air_humidity" -> "humidity";
+            case "soil_temp" -> "soilTemp";
+            case "soil_moisture" -> "soilHumidity";
+            case "soil_ph" -> "soilPh";
+            case "light_intensity" -> "light";
+            case "co2_ppm" -> "co2";
+            case "soil_n" -> "soilN";
+            case "soil_p" -> "soilP";
+            case "soil_k" -> "soilK";
+            default -> sensorKey;
+        };
     }
 
     private static String defaultIfBlank(String value, String fallback) {

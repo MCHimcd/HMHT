@@ -25,6 +25,7 @@ import ww.wangnong.entity.CapabilitySensor;
 import ww.wangnong.entity.DeviceShadow;
 import ww.wangnong.entity.DeviceProfile;
 import ww.wangnong.entity.IngestDeadletter;
+import ww.wangnong.entity.Node;
 import ww.wangnong.repository.CapabilityEquipmentRepository;
 import ww.wangnong.repository.CapabilitySensorRepository;
 import ww.wangnong.repository.CommandAckRepository;
@@ -32,8 +33,13 @@ import ww.wangnong.repository.CommandRequestRepository;
 import ww.wangnong.repository.DeviceCapabilityRepository;
 import ww.wangnong.repository.DeviceProfileRepository;
 import ww.wangnong.repository.DeviceShadowRepository;
+import ww.wangnong.repository.EquipmentTypeRepository;
 import ww.wangnong.repository.IngestAuditRepository;
 import ww.wangnong.repository.IngestDeadletterRepository;
+import ww.wangnong.repository.NodeEquipmentRepository;
+import ww.wangnong.repository.NodeRepository;
+import ww.wangnong.repository.NodeSensorRepository;
+import ww.wangnong.repository.SensorTypeRepository;
 
 @ExtendWith(MockitoExtension.class)
 class ProtocolPersistenceServiceTest {
@@ -64,6 +70,21 @@ class ProtocolPersistenceServiceTest {
 
     @Mock
     private CapabilityEquipmentRepository capabilityEquipmentRepository;
+
+    @Mock
+    private NodeRepository nodeRepository;
+
+    @Mock
+    private SensorTypeRepository sensorTypeRepository;
+
+    @Mock
+    private EquipmentTypeRepository equipmentTypeRepository;
+
+    @Mock
+    private NodeSensorRepository nodeSensorRepository;
+
+    @Mock
+    private NodeEquipmentRepository nodeEquipmentRepository;
 
     @InjectMocks
     private ProtocolPersistenceService service;

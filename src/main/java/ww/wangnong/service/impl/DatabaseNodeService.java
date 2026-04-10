@@ -111,7 +111,8 @@ public class DatabaseNodeService implements NodeService {
         User user = authService.requireUser(token);
         Node n = nodeRepo.findByNodeId(nodeId)
                 .orElseThrow(() -> new BizException(404, "节点不存在"));
-        if (!"admin".equals(user.getRole()) && !n.getUser().getId().equals(user.getId())
+        if (!"admin".equals(user.getRole())
+                && (n.getUser() == null || !n.getUser().getId().equals(user.getId()))
                 && !userNodeAccessRepo.existsByUserIdAndNodeId(user.getId(), nodeId)) {
             throw new BizException(403, "无权访问该节点");
         }

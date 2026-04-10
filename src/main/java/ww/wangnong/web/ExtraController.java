@@ -7,10 +7,12 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
+import ww.wangnong.config.condition.ConditionalOnMockMode;
 import ww.wangnong.dto.ApiResponse;
 import ww.wangnong.service.ExtraService;
 
 @RestController
+@ConditionalOnMockMode
 public class ExtraController {
 
     private final ExtraService extraService;
@@ -19,7 +21,8 @@ public class ExtraController {
         this.extraService = extraService;
     }
 
-    record TraceabilityScanRequest(String code) {}
+    record TraceabilityScanRequest(String code) {
+    }
 
     @PostMapping("/v1/traceability/scan")
     public ApiResponse<?> scanTraceability(@RequestBody TraceabilityScanRequest req) {
@@ -33,13 +36,13 @@ public class ExtraController {
 
     @GetMapping("/v1/cameras/{nodeId}/playback")
     public ApiResponse<?> getPlayback(@PathVariable String nodeId,
-                                      @RequestParam(required = false) String date) {
+            @RequestParam(required = false) String date) {
         return ApiResponse.ok(extraService.getCameraPlayback(nodeId, date));
     }
 
     @GetMapping("/v1/cameras/{nodeId}/keyframes")
     public ApiResponse<?> getKeyframes(@PathVariable String nodeId,
-                                       @RequestParam(required = false) String date) {
+            @RequestParam(required = false) String date) {
         return ApiResponse.ok(extraService.getCameraKeyframes(nodeId, date));
     }
 }

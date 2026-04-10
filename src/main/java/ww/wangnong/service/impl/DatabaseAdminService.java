@@ -8,7 +8,9 @@ import ww.wangnong.entity.Node;
 import ww.wangnong.entity.User;
 import ww.wangnong.entity.UserNodeAccess;
 import ww.wangnong.exception.BizException;
+import ww.wangnong.repository.NodeEquipmentRepository;
 import ww.wangnong.repository.NodeRepository;
+import ww.wangnong.repository.NodeSensorRepository;
 import ww.wangnong.repository.UserNodeAccessRepository;
 import ww.wangnong.repository.UserRepository;
 import ww.wangnong.service.AdminService;
@@ -22,17 +24,23 @@ public class DatabaseAdminService implements AdminService {
     private final NodeRepository nodeRepo;
     private final UserRepository userRepo;
     private final UserNodeAccessRepository userNodeAccessRepo;
+    private final NodeSensorRepository nodeSensorRepo;
+    private final NodeEquipmentRepository nodeEquipmentRepo;
     private final OperationLogService opLog;
 
     public DatabaseAdminService(AuthService authService,
             NodeRepository nodeRepo,
             UserRepository userRepo,
             UserNodeAccessRepository userNodeAccessRepo,
+            NodeSensorRepository nodeSensorRepo,
+            NodeEquipmentRepository nodeEquipmentRepo,
             OperationLogService opLog) {
         this.authService = authService;
         this.nodeRepo = nodeRepo;
         this.userRepo = userRepo;
         this.userNodeAccessRepo = userNodeAccessRepo;
+        this.nodeSensorRepo = nodeSensorRepo;
+        this.nodeEquipmentRepo = nodeEquipmentRepo;
         this.opLog = opLog;
     }
 
@@ -68,6 +76,8 @@ public class DatabaseAdminService implements AdminService {
         User admin = authService.requireAdmin(token);
         Node node = nodeRepo.findByNodeId(nodeId)
                 .orElseThrow(() -> new BizException(404, "节点不存在"));
+        nodeSensorRepo.findByNodeId(nodeId).forEach(nodeSensorRepo::delete);
+        nodeEquipmentRepo.findByNodeId(nodeId).forEach(nodeEquipmentRepo::delete);
         nodeRepo.delete(node);
         opLog.log("NODE_DELETE", admin.getId(), admin.getUserName(), "node", nodeId, node.getNodeName());
     }
