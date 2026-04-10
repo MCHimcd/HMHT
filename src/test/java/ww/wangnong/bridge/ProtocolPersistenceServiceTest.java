@@ -2,14 +2,24 @@ package ww.wangnong.bridge;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.never;
 
 import java.time.Instant;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -191,6 +201,10 @@ class ProtocolPersistenceServiceTest {
 
         verify(deviceProfileRepository).save(any());
         verify(deviceCapabilityRepository).save(any());
+        verify(capabilitySensorRepository)
+                .findByDeviceIdAndCapabilityVersionOrderBySensorKey("A03_Node_01", "2.0");
+        verify(capabilityEquipmentRepository)
+                .findByDeviceIdAndCapabilityVersionOrderByEquipmentKey("A03_Node_01", "2.0");
 
         ArgumentCaptor<CapabilitySensor> sensorCaptor = ArgumentCaptor.forClass(CapabilitySensor.class);
         verify(capabilitySensorRepository).save(sensorCaptor.capture());
@@ -199,6 +213,149 @@ class ProtocolPersistenceServiceTest {
         ArgumentCaptor<CapabilityEquipment> equipmentCaptor = ArgumentCaptor.forClass(CapabilityEquipment.class);
         verify(capabilityEquipmentRepository).save(equipmentCaptor.capture());
         assertThat(equipmentCaptor.getValue().getEquipmentKey()).isEqualTo("water_pump");
+
+        verify(capabilitySensorRepository, never()).deleteByDeviceIdAndCapabilityVersion(any(), any());
+        verify(capabilityEquipmentRepository, never()).deleteByDeviceIdAndCapabilityVersion(any(), any());
+    }
+
+    @Test
+    void recordCapabilitySnapshot_existingDetails_updatesInPlaceAndDeletesStaleKeys() {
+        CapabilitySensor existingSensor = new CapabilitySensor();
+        existingSensor.setId(11L);
+        existingSensor.setDeviceId("A03_Node_01");
+        existingSensor.setCapabilityVersion("2.0");
+        existingSensor.setSensorKey("air_temp");
+        existingSensor.setDataType("string");
+
+        CapabilitySensor staleSensor = new CapabilitySensor();
+        staleSensor.setId(12L);
+        staleSensor.setDeviceId("A03_Node_01");
+        staleSensor.setCapabilityVersion("2.0");
+        staleSensor.setSensorKey("soil_temp");
+
+        CapabilityEquipment existingEquipment = new CapabilityEquipment();
+        existingEquipment.setId(21L);
+        existingEquipment.setDeviceId("A03_Node_01");
+        existingEquipment.setCapabilityVersion("2.0");
+        existingEquipment.setEquipmentKey("water_pump");
+        existingEquipment.setControllable(true);
+
+        CapabilityEquipment staleEquipment = new CapabilityEquipment();
+        staleEquipment.setId(22L);
+        staleEquipment.setDeviceId("A03_Node_01");
+        staleEquipment.setCapabilityVersion("2.0");
+        staleEquipment.setEquipmentKey("fan");
+
+        when(capabilitySensorRepository.findByDeviceIdAndCapabilityVersionOrderBySensorKey("A03_Node_01", "2.0"))
+                .thenReturn(List.of(existingSensor, staleSensor));
+        when(capabilityEquipmentRepository.findByDeviceIdAndCapabilityVersionOrderByEquipmentKey("A03_Node_01", "2.0"))
+                .thenReturn(List.of(existingEquipment, staleEquipment));
+
+        service.recordCapabilitySnapshot(
+                "A03_Node_01",
+                "2.0",
+                "sha256:next",
+                Map.of("air_temp", Map.of("data_type", "number", "unit", "C", "min", -20, "max", 80)),
+                Map.of("water_pump", Map.of("controllable", false, "actions", java.util.List.of("turn_off"))),
+                1765000111200L,
+                "/hmht/device/A03_Node_01/capability",
+                "{\"payload\":{}}",
+                "trace-4b");
+
+        ArgumentCaptor<CapabilitySensor> sensorCaptor = ArgumentCaptor.forClass(CapabilitySensor.class);
+        verify(capabilitySensorRepository).save(sensorCaptor.capture());
+        assertThat(sensorCaptor.getValue()).isSameAs(existingSensor);
+        assertThat(sensorCaptor.getValue().getDataType()).isEqualTo("number");
+        assertThat(sensorCaptor.getValue().getUnit()).isEqualTo("C");
+        assertThat(sensorCaptor.getValue().getMinValue()).isEqualTo(-20.0);
+        assertThat(sensorCaptor.getValue().getMaxValue()).isEqualTo(80.0);
+
+        verify(capabilitySensorRepository).deleteAll(argThat(items -> {
+            if (!(items instanceof Iterable<?> iterable)) {
+                return false;
+            }
+            java.util.List<Object> values = new java.util.ArrayList<>();
+            iterable.forEach(values::add);
+            return values.size() == 1 && values.contains(staleSensor);
+        }));
+
+        ArgumentCaptor<CapabilityEquipment> equipmentCaptor = ArgumentCaptor.forClass(CapabilityEquipment.class);
+        verify(capabilityEquipmentRepository).save(equipmentCaptor.capture());
+        assertThat(equipmentCaptor.getValue()).isSameAs(existingEquipment);
+        assertThat(equipmentCaptor.getValue().getControllable()).isFalse();
+        assertThat(equipmentCaptor.getValue().getActionsJson()).contains("turn_off");
+
+        verify(capabilityEquipmentRepository).deleteAll(argThat(items -> {
+            if (!(items instanceof Iterable<?> iterable)) {
+                return false;
+            }
+            java.util.List<Object> values = new java.util.ArrayList<>();
+            iterable.forEach(values::add);
+            return values.size() == 1 && values.contains(staleEquipment);
+        }));
+        verify(capabilitySensorRepository, never()).deleteByDeviceIdAndCapabilityVersion(any(), any());
+        verify(capabilityEquipmentRepository, never()).deleteByDeviceIdAndCapabilityVersion(any(), any());
+    }
+
+    @Test
+    void recordCapabilitySnapshot_sameDeviceAndVersion_serializesConcurrentCalls() throws Exception {
+        CountDownLatch firstEntered = new CountDownLatch(1);
+        CountDownLatch releaseFirst = new CountDownLatch(1);
+        CountDownLatch secondReady = new CountDownLatch(1);
+        AtomicBoolean firstInvocation = new AtomicBoolean(true);
+        AtomicInteger activeCalls = new AtomicInteger();
+        AtomicInteger maxConcurrentCalls = new AtomicInteger();
+
+        when(deviceProfileRepository.findByDeviceId("A03_Node_01")).thenAnswer(invocation -> {
+            int current = activeCalls.incrementAndGet();
+            maxConcurrentCalls.accumulateAndGet(current, Math::max);
+            try {
+                if (firstInvocation.compareAndSet(true, false)) {
+                    firstEntered.countDown();
+                    assertThat(releaseFirst.await(2, TimeUnit.SECONDS)).isTrue();
+                }
+                return Optional.empty();
+            } finally {
+                activeCalls.decrementAndGet();
+            }
+        });
+
+        try (ExecutorService executor = Executors.newFixedThreadPool(2)) {
+            Future<?> first = executor.submit(() -> service.recordCapabilitySnapshot(
+                    "A03_Node_01",
+                    "2.0",
+                    "sha256:concurrent-1",
+                    Map.of("air_temp", Map.of("data_type", "number")),
+                    Map.of(),
+                    1765000111200L,
+                    "/hmht/device/A03_Node_01/capability",
+                    "{\"payload\":{}}",
+                    "trace-5a"));
+
+            assertThat(firstEntered.await(2, TimeUnit.SECONDS)).isTrue();
+
+            Future<?> second = executor.submit(() -> {
+                secondReady.countDown();
+                service.recordCapabilitySnapshot(
+                        "A03_Node_01",
+                        "2.0",
+                        "sha256:concurrent-2",
+                        Map.of("air_temp", Map.of("data_type", "number")),
+                        Map.of(),
+                        1765000111200L,
+                        "/hmht/device/A03_Node_01/capability",
+                        "{\"payload\":{}}",
+                        "trace-5b");
+            });
+
+            assertThat(secondReady.await(2, TimeUnit.SECONDS)).isTrue();
+            releaseFirst.countDown();
+
+            first.get(2, TimeUnit.SECONDS);
+            second.get(2, TimeUnit.SECONDS);
+        }
+
+        assertThat(maxConcurrentCalls.get()).isEqualTo(1);
     }
 
     @Test

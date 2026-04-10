@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
@@ -131,12 +132,12 @@ class PahoMqttServiceTest {
     }
 
     @Test
-    void publish_notConnected_throwsIllegalState() {
+    void publish_notConnected_skipsWithWarning(CapturedOutput output) {
         PahoMqttService service = new PahoMqttService(properties, (uri, clientId) -> mqttClient);
 
-        assertThatThrownBy(() -> service.publish("/topic", "payload", 1, false))
-                .isInstanceOf(IllegalStateException.class)
-                .hasMessageContaining("not connected");
+        service.publish("/topic", "payload", 1, false);
+
+        assertThat(output).contains("Publish skipped");
     }
 
     @Test
@@ -151,6 +152,21 @@ class PahoMqttServiceTest {
         service.publish("/hardware/status", "ok", 1, false);
 
         verify(mqttClient).publish(eq("/hardware/status"), any());
+    }
+
+    @Test
+    void publishAsync_connected_delegatesToClientWithoutWaiting() throws Exception {
+        when(mqttClient.connect(any(MqttConnectOptions.class))).thenReturn(connectToken);
+        when(mqttClient.isConnected()).thenReturn(true);
+        when(mqttClient.publish(anyString(), any())).thenReturn(deliveryToken);
+
+        PahoMqttService service = new PahoMqttService(properties, (uri, clientId) -> mqttClient);
+        service.connect();
+
+        service.publishAsync("/hardware/status", "ok", 1, false);
+
+        verify(mqttClient).publish(eq("/hardware/status"), any());
+        verify(deliveryToken, never()).waitForCompletion(anyLong());
     }
 
     @Test

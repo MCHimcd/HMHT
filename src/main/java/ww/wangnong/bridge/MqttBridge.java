@@ -2,7 +2,9 @@ package ww.wangnong.bridge;
 
 import java.util.LinkedHashMap;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 import com.fasterxml.jackson.core.type.TypeReference;
@@ -73,6 +75,7 @@ public class MqttBridge {
     private final NodeSensorRepository nodeSensorRepo;
     private final NodeEquipmentRepository nodeEquipmentRepo;
     private final AtomicBoolean realHardwareReceived = new AtomicBoolean(false);
+    private final Set<String> capabilityBootstrapped = ConcurrentHashMap.newKeySet();
 
     public MqttBridge(PahoMqttService mqtt,
             AlertService alertService,
@@ -171,9 +174,15 @@ public class MqttBridge {
                         hwPayload.put("device_id", topicDeviceId);
                     }
 
+                    String deviceId = str(hwPayload.get("device_id"));
+
                     protocolPersistenceService.recordTelemetryHeartbeat(
-                            str(hwPayload.get("device_id")),
+                            deviceId,
                             toLong(hwPayload.get("timestamp")));
+
+                    // Auto-register capability from first telemetry if no capability snapshot
+                    // exists
+                    bootstrapCapabilityFromTelemetry(deviceId, hwPayload, msg.topic());
 
                     Map<String, Object> appPayload = TelemetryTranslator.hardwareV2ToApp(hwPayload);
                     forwardTelemetry(msg.topic(), appPayload);
@@ -182,7 +191,7 @@ public class MqttBridge {
                     protocolPersistenceService.recordIngestAudit(
                             "telemetry",
                             msg.topic(),
-                            str(hwPayload.get("device_id")),
+                            deviceId,
                             str(hwPayload.get("protocol_version")),
                             str(hwPayload.get("trace_id")),
                             "forwarded",
@@ -324,6 +333,7 @@ public class MqttBridge {
 
         // 3) App command → forward based on run mode route
         subscriptionRegistry.register(APP_COMMAND, BRIDGE_QOS, msg -> {
+            long cmdStartNs = System.nanoTime();
             try {
                 // Extract nodeId from topic: /wangnong_2026/node/{nodeId}/command
                 String topic = msg.topic();
@@ -341,11 +351,11 @@ public class MqttBridge {
                 String traceId = "";
 
                 if (enablePythonRoute) {
-                    mqtt.publish(pyTopic, msg.payload(), 1, false);
+                    mqtt.publishAsync(pyTopic, msg.payload(), 1, false);
                 }
                 if (enableHardwareRoute) {
                     hwEnvelope = toHardwareCommandEnvelope(deviceId, msg.payload());
-                    mqtt.publish(hwTopic, hwEnvelope.rawJson(), 1, false);
+                    mqtt.publishAsync(hwTopic, hwEnvelope.rawJson(), 1, false);
 
                     protocolPersistenceService.recordCommandDispatched(
                             deviceId,
@@ -376,8 +386,9 @@ public class MqttBridge {
                 } else if (enablePythonRoute) {
                     log.debug("[Bridge] Command forwarded: {} → {}", topic, pyTopic);
                 } else {
-                    log.info("[Bridge][HW-OUT] Command forwarded: {} → {}, payload={}",
-                            topic, hwTopic, hwEnvelope != null ? hwEnvelope.rawJson() : msg.payload());
+                    log.info("[Bridge][HW-OUT] Command forwarded: {} → {}, latency_ms={}, payload={}",
+                            topic, hwTopic, (System.nanoTime() - cmdStartNs) / 1_000_000,
+                            hwEnvelope != null ? hwEnvelope.rawJson() : msg.payload());
                 }
             } catch (Exception e) {
                 log.warn("[Bridge] Failed to bridge command: {}", msg.topic(), e);
@@ -397,6 +408,38 @@ public class MqttBridge {
                 runModeHolder.getMode(),
                 enablePythonRoute,
                 enableHardwareRoute);
+    }
+
+    @SuppressWarnings("unchecked")
+    private void bootstrapCapabilityFromTelemetry(String deviceId, Map<String, Object> hwPayload, String topic) {
+        if (deviceId.isBlank() || !capabilityBootstrapped.add(deviceId)) {
+            return;
+        }
+        try {
+            Map<String, Object> payload = extractPayloadMap(hwPayload);
+            Map<String, Object> sensors = payload.get("sensors") instanceof Map<?, ?> map
+                    ? (Map<String, Object>) map
+                    : Map.of();
+            Map<String, Object> equipments = payload.get("equipments") instanceof Map<?, ?> map
+                    ? (Map<String, Object>) map
+                    : Map.of();
+            if (sensors.isEmpty() && equipments.isEmpty()) {
+                return;
+            }
+
+            String version = firstNonBlank(str(hwPayload.get("protocol_version")), "2.0");
+            String traceId = str(hwPayload.get("trace_id"));
+            Long timestamp = toLong(hwPayload.get("timestamp"));
+
+            protocolPersistenceService.recordCapabilitySnapshot(
+                    deviceId, version, "", sensors, equipments,
+                    timestamp, topic, "", traceId);
+            log.info("[Bridge] Auto-registered capability from telemetry: deviceId={}, sensors={}, equipments={}",
+                    deviceId, sensors.keySet(), equipments.keySet());
+        } catch (Exception e) {
+            log.warn("[Bridge] Failed to bootstrap capability from telemetry: deviceId={}", deviceId, e);
+            capabilityBootstrapped.remove(deviceId);
+        }
     }
 
     private void forwardTelemetry(String sourceTopic, Map<String, Object> appPayload) throws Exception {

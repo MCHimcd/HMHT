@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
@@ -223,6 +224,48 @@ class MqttBridgeTest {
                 assertThat(output.getAll()).contains("/hmht/device/N01/ack");
                 assertThat(output.getAll()).contains("qos=1");
                 assertThat(output.getAll()).contains("retained=false");
+        }
+
+        @Test
+        void appCommand_hardwareMode_forwardsToHardwareTopicViaPublishAsync() {
+                when(runModeHolder.isPythonRouteEnabled()).thenReturn(false);
+                when(runModeHolder.isHardwareRouteEnabled()).thenReturn(true);
+                when(runModeHolder.getMode()).thenReturn(RunMode.HARDWARE);
+
+                MqttBridge bridge = new MqttBridge(
+                                mqttService,
+                                alertService,
+                                influxTelemetryWriter,
+                                subscriptionRegistry,
+                                protocolPersistenceService,
+                                runModeHolder,
+                                alertChecker,
+                                simNodeSimulator,
+                                nodeRepository,
+                                nodeSensorRepository,
+                                nodeEquipmentRepository);
+
+                bridge.init();
+
+                Consumer<PahoMqttService.InboundMessage> commandHandler = captureHandler(APP_COMMAND);
+                commandHandler.accept(new PahoMqttService.InboundMessage(
+                                "/wangnong_2026/node/A03_Node_01/command",
+                                "{\"cmd_id\":\"app_1\",\"timestamp\":1775837206642,\"msg_type\":\"control\",\"action\":{\"target_device\":\"mode\",\"command\":\"smart\",\"parameters\":{\"duration_seconds\":15}}}",
+                                1,
+                                false));
+
+                verify(mqttService).publishAsync(eq("/hmht/device/A03_Node_01/command"), any(), eq(1), eq(false));
+                verify(mqttService, never()).publish(eq("/hmht/device/A03_Node_01/command"), any(), eq(1), eq(false));
+                verify(protocolPersistenceService, times(1)).recordCommandDispatched(
+                                eq("A03_Node_01"),
+                                any(),
+                                eq("mode"),
+                                eq("smart"),
+                                any(),
+                                eq(5000),
+                                eq("/wangnong_2026/node/A03_Node_01/command"),
+                                eq("/hmht/device/A03_Node_01/command"),
+                                any());
         }
 
         @SuppressWarnings({ "rawtypes", "unchecked" })

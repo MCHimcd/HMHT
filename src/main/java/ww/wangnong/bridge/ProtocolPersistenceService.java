@@ -1,11 +1,18 @@
 package ww.wangnong.bridge;
 
-import java.util.LinkedHashMap;
-import java.util.List;
-import java.util.Map;
 import java.time.Instant;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
+import java.util.List;
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentMap;
+import java.util.concurrent.locks.ReentrantLock;
+import java.util.function.Function;
+import java.util.stream.Collectors;
 
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -72,6 +79,7 @@ public class ProtocolPersistenceService {
     private final EquipmentTypeRepository equipmentTypeRepository;
     private final NodeSensorRepository nodeSensorRepository;
     private final NodeEquipmentRepository nodeEquipmentRepository;
+    private final ConcurrentMap<String, ReentrantLock> capabilitySnapshotLocks = new ConcurrentHashMap<>();
 
     public ProtocolPersistenceService(
             CommandRequestRepository commandRequestRepository,
@@ -241,9 +249,14 @@ public class ProtocolPersistenceService {
             String sourceTopic,
             String rawPayload,
             String traceId) {
+        String safeDeviceId = defaultIfBlank(deviceId, "unknown");
+        String safeVersion = defaultIfBlank(capabilityVersion, "2.0");
+        ReentrantLock lock = capabilitySnapshotLocks.computeIfAbsent(
+                capabilitySnapshotLockKey(safeDeviceId, safeVersion),
+                ignored -> new ReentrantLock());
+
+        lock.lock();
         try {
-            String safeDeviceId = defaultIfBlank(deviceId, "unknown");
-            String safeVersion = defaultIfBlank(capabilityVersion, "2.0");
             LocalDateTime reportedAt = toDateTime(reportedAtMs);
 
             DeviceProfile profile = deviceProfileRepository.findByDeviceId(safeDeviceId).orElseGet(DeviceProfile::new);
@@ -262,48 +275,8 @@ public class ProtocolPersistenceService {
             capability.setReportedAt(reportedAt);
             deviceCapabilityRepository.save(capability);
 
-            capabilitySensorRepository.deleteByDeviceIdAndCapabilityVersion(safeDeviceId, safeVersion);
-            capabilityEquipmentRepository.deleteByDeviceIdAndCapabilityVersion(safeDeviceId, safeVersion);
-
-            for (var entry : sensors.entrySet()) {
-                CapabilitySensor sensor = new CapabilitySensor();
-                sensor.setDeviceId(safeDeviceId);
-                sensor.setCapabilityVersion(safeVersion);
-                sensor.setSensorKey(entry.getKey());
-
-                Object raw = entry.getValue();
-                if (raw instanceof Map<?, ?> detailMap) {
-                    Map<String, Object> detail = (Map<String, Object>) detailMap;
-                    sensor.setDataType(
-                            defaultIfBlank(str(detail.get("data_type")), inferDataType(detail.get("value"))));
-                    sensor.setUnit(str(detail.get("unit")));
-                    sensor.setMinValue(toDouble(firstNonNull(detail.get("min"), detail.get("min_value"))));
-                    sensor.setMaxValue(toDouble(firstNonNull(detail.get("max"), detail.get("max_value"))));
-                    sensor.setRequiredField(toBoolean(detail.get("required_field"), false));
-                } else {
-                    sensor.setDataType(inferDataType(raw));
-                    sensor.setRequiredField(false);
-                }
-                capabilitySensorRepository.save(sensor);
-            }
-
-            for (var entry : equipments.entrySet()) {
-                CapabilityEquipment equipment = new CapabilityEquipment();
-                equipment.setDeviceId(safeDeviceId);
-                equipment.setCapabilityVersion(safeVersion);
-                equipment.setEquipmentKey(entry.getKey());
-
-                Object raw = entry.getValue();
-                if (raw instanceof Map<?, ?> detailMap) {
-                    Map<String, Object> detail = (Map<String, Object>) detailMap;
-                    equipment.setControllable(toBoolean(detail.get("controllable"), true));
-                    equipment.setActionsJson(toActionsJson(detail.get("actions")));
-                } else {
-                    equipment.setControllable(true);
-                    equipment.setActionsJson("[]");
-                }
-                capabilityEquipmentRepository.save(equipment);
-            }
+            upsertCapabilitySensors(safeDeviceId, safeVersion, sensors);
+            upsertCapabilityEquipments(safeDeviceId, safeVersion, equipments);
 
             recordIngestAudit(
                     "capability",
@@ -313,16 +286,113 @@ public class ProtocolPersistenceService {
                     traceId,
                     "stored",
                     null);
-        } catch (Exception e) {
-            log.warn("[ProtocolPersistence] Failed to persist capability snapshot: deviceId={}", deviceId, e);
-            recordDeadletter(
-                    sourceTopic,
-                    defaultIfBlank(deviceId, ""),
-                    "capability",
-                    e.getMessage(),
-                    rawPayload,
-                    traceId);
+        } finally {
+            lock.unlock();
+            cleanupCapabilitySnapshotLock(safeDeviceId, safeVersion, lock);
         }
+    }
+
+    @SuppressWarnings("unchecked")
+    private void upsertCapabilitySensors(String deviceId, String capabilityVersion, Map<String, Object> sensors) {
+        Map<String, CapabilitySensor> existingByKey = capabilitySensorRepository
+                .findByDeviceIdAndCapabilityVersionOrderBySensorKey(deviceId, capabilityVersion)
+                .stream()
+                .collect(Collectors.toMap(
+                        CapabilitySensor::getSensorKey,
+                        Function.identity(),
+                        (left, right) -> left,
+                        LinkedHashMap::new));
+        LinkedHashSet<String> seenKeys = new LinkedHashSet<>();
+
+        for (var entry : sensors.entrySet()) {
+            String sensorKey = defaultIfBlank(entry.getKey());
+            if (sensorKey.isBlank() || !seenKeys.add(sensorKey)) {
+                continue;
+            }
+
+            CapabilitySensor sensor = existingByKey.remove(sensorKey);
+            if (sensor == null) {
+                sensor = new CapabilitySensor();
+            }
+            sensor.setDeviceId(deviceId);
+            sensor.setCapabilityVersion(capabilityVersion);
+            sensor.setSensorKey(sensorKey);
+
+            Object raw = entry.getValue();
+            if (raw instanceof Map<?, ?> detailMap) {
+                Map<String, Object> detail = (Map<String, Object>) detailMap;
+                sensor.setDataType(defaultIfBlank(str(detail.get("data_type")), inferDataType(detail.get("value"))));
+                sensor.setUnit(str(detail.get("unit")));
+                sensor.setMinValue(toDouble(firstNonNull(detail.get("min"), detail.get("min_value"))));
+                sensor.setMaxValue(toDouble(firstNonNull(detail.get("max"), detail.get("max_value"))));
+                sensor.setRequiredField(toBoolean(detail.get("required_field"), false));
+            } else {
+                sensor.setDataType(inferDataType(raw));
+                sensor.setUnit(null);
+                sensor.setMinValue(null);
+                sensor.setMaxValue(null);
+                sensor.setRequiredField(false);
+            }
+            capabilitySensorRepository.save(sensor);
+        }
+
+        if (!existingByKey.isEmpty()) {
+            capabilitySensorRepository.deleteAll(new ArrayList<>(existingByKey.values()));
+        }
+    }
+
+    @SuppressWarnings("unchecked")
+    private void upsertCapabilityEquipments(String deviceId, String capabilityVersion, Map<String, Object> equipments) {
+        Map<String, CapabilityEquipment> existingByKey = capabilityEquipmentRepository
+                .findByDeviceIdAndCapabilityVersionOrderByEquipmentKey(deviceId, capabilityVersion)
+                .stream()
+                .collect(Collectors.toMap(
+                        CapabilityEquipment::getEquipmentKey,
+                        Function.identity(),
+                        (left, right) -> left,
+                        LinkedHashMap::new));
+        LinkedHashSet<String> seenKeys = new LinkedHashSet<>();
+
+        for (var entry : equipments.entrySet()) {
+            String equipmentKey = defaultIfBlank(entry.getKey());
+            if (equipmentKey.isBlank() || !seenKeys.add(equipmentKey)) {
+                continue;
+            }
+
+            CapabilityEquipment equipment = existingByKey.remove(equipmentKey);
+            if (equipment == null) {
+                equipment = new CapabilityEquipment();
+            }
+            equipment.setDeviceId(deviceId);
+            equipment.setCapabilityVersion(capabilityVersion);
+            equipment.setEquipmentKey(equipmentKey);
+
+            Object raw = entry.getValue();
+            if (raw instanceof Map<?, ?> detailMap) {
+                Map<String, Object> detail = (Map<String, Object>) detailMap;
+                equipment.setControllable(toBoolean(detail.get("controllable"), true));
+                equipment.setActionsJson(toActionsJson(detail.get("actions")));
+            } else {
+                equipment.setControllable(true);
+                equipment.setActionsJson("[]");
+            }
+            capabilityEquipmentRepository.save(equipment);
+        }
+
+        if (!existingByKey.isEmpty()) {
+            capabilityEquipmentRepository.deleteAll(new ArrayList<>(existingByKey.values()));
+        }
+    }
+
+    private static String capabilitySnapshotLockKey(String deviceId, String capabilityVersion) {
+        return deviceId + "::" + capabilityVersion;
+    }
+
+    private void cleanupCapabilitySnapshotLock(String deviceId, String capabilityVersion, ReentrantLock lock) {
+        if (lock.hasQueuedThreads()) {
+            return;
+        }
+        capabilitySnapshotLocks.remove(capabilitySnapshotLockKey(deviceId, capabilityVersion), lock);
     }
 
     private static LocalDateTime toDateTime(Long epochMs) {

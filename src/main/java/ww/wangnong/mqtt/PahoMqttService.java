@@ -5,9 +5,14 @@ import java.nio.charset.StandardCharsets;
 import java.util.Map;
 import java.util.Objects;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Consumer;
 
 import org.eclipse.paho.client.mqttv3.IMqttDeliveryToken;
+import org.eclipse.paho.client.mqttv3.IMqttToken;
 import org.eclipse.paho.client.mqttv3.MqttAsyncClient;
 import org.eclipse.paho.client.mqttv3.MqttCallbackExtended;
 import org.eclipse.paho.client.mqttv3.MqttConnectOptions;
@@ -35,6 +40,15 @@ public class PahoMqttService {
     private final MqttClientFactory clientFactory;
 
     private final Map<String, SubscriptionBinding> subscriptions = new ConcurrentHashMap<>();
+    private static final AtomicInteger HANDLER_THREAD_SEQ = new AtomicInteger(0);
+    private final ExecutorService handlerExecutor = Executors.newFixedThreadPool(4,
+            r -> { Thread t = new Thread(r, "mqtt-handler-" + HANDLER_THREAD_SEQ.getAndIncrement()); t.setDaemon(true); return t; });
+    private final ExecutorService commandExecutor = Executors.newSingleThreadExecutor(
+            r -> {
+                Thread t = new Thread(r, "mqtt-command-handler");
+                t.setDaemon(true);
+                return t;
+            });
 
     private MqttAsyncClient client;
     private volatile ConnectionState state = ConnectionState.DISCONNECTED;
@@ -86,6 +100,7 @@ public class PahoMqttService {
             options.setCleanSession(properties.isCleanSession());
             options.setConnectionTimeout(properties.getConnectionTimeoutSeconds());
             options.setKeepAliveInterval(properties.getKeepAliveIntervalSeconds());
+            options.setMaxReconnectDelay(10_000);
             options.setMaxInflight(50);
 
             if (properties.getUsername() != null && !properties.getUsername().isBlank()) {
@@ -130,7 +145,8 @@ public class PahoMqttService {
             throw new IllegalArgumentException("payload cannot be blank");
         }
         if (!isConnected()) {
-            throw new IllegalStateException("MQTT client is not connected.");
+            log.warn("[MQTT] Publish skipped (not connected): topic={}", topic);
+            return;
         }
 
         String targetTopic = (topic == null || topic.isBlank()) ? properties.getDefaultTopic() : topic;
@@ -142,7 +158,7 @@ public class PahoMqttService {
             message.setRetained(retained);
 
             IMqttDeliveryToken token = client.publish(targetTopic, message);
-            token.waitForCompletion();
+            token.waitForCompletion(5_000);
             if (shouldLogOutboundToConsole()) {
                 log.info(
                         "[MQTT][OUT] topic={}, qos={}, retained={}, payload={}",
@@ -155,7 +171,38 @@ public class PahoMqttService {
                         retained);
             }
         } catch (MqttException e) {
-            throw new IllegalStateException("Failed to publish MQTT message.", e);
+            log.warn("[MQTT] Publish failed (will retry on reconnect): topic={}", targetTopic, e);
+        }
+    }
+
+    /**
+     * Non-blocking publish — fire-and-forget, does NOT call waitForCompletion().
+     * Use for latency-sensitive forwarding (e.g., command bridge).
+     */
+    public void publishAsync(String topic, String payload, int qos, boolean retained) {
+        if (!properties.isEnabled()) {
+            throw new IllegalStateException("MQTT is disabled.");
+        }
+        if (payload == null || payload.isBlank()) {
+            throw new IllegalArgumentException("payload cannot be blank");
+        }
+        if (!isConnected()) {
+            log.warn("[MQTT] PublishAsync skipped (not connected): topic={}", topic);
+            return;
+        }
+
+        String targetTopic = (topic == null || topic.isBlank()) ? properties.getDefaultTopic() : topic;
+        int normalizedQos = normalizeQos(qos);
+
+        try {
+            MqttMessage message = new MqttMessage(payload.getBytes(StandardCharsets.UTF_8));
+            message.setQos(normalizedQos);
+            message.setRetained(retained);
+
+            client.publish(targetTopic, message);
+            log.info("[MQTT][ASYNC-OUT] topic={}, qos={}, payload={}", targetTopic, normalizedQos, payload);
+        } catch (MqttException e) {
+            log.warn("[MQTT] PublishAsync failed: topic={}", targetTopic, e);
         }
     }
 
@@ -205,6 +252,15 @@ public class PahoMqttService {
         if (client == null) {
             state = properties.isEnabled() ? ConnectionState.DISCONNECTED : ConnectionState.DISABLED;
             return;
+        }
+
+        commandExecutor.shutdown();
+        handlerExecutor.shutdown();
+        try {
+            commandExecutor.awaitTermination(5, TimeUnit.SECONDS);
+            handlerExecutor.awaitTermination(5, TimeUnit.SECONDS);
+        } catch (InterruptedException ignored) {
+            Thread.currentThread().interrupt();
         }
 
         try {
@@ -285,12 +341,20 @@ public class PahoMqttService {
                 return;
             }
 
-            try {
-                binding.handler().accept(inbound);
-            } catch (Exception ex) {
-                log.warn("MQTT subscription handler failed: topicFilter={}, topic={}", topicFilter, topic, ex);
-            }
+            ExecutorService executor = isCommandTopic(topicFilter, topic) ? commandExecutor : handlerExecutor;
+            executor.execute(() -> {
+                try {
+                    binding.handler().accept(inbound);
+                } catch (Exception ex) {
+                    log.warn("MQTT subscription handler failed: topicFilter={}, topic={}", topicFilter, topic, ex);
+                }
+            });
         });
+    }
+
+    private boolean isCommandTopic(String topicFilter, String topic) {
+        return (topicFilter != null && topicFilter.endsWith("/command"))
+                || (topic != null && topic.endsWith("/command"));
     }
 
     private int normalizeQos(int qos) {
