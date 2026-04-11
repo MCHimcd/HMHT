@@ -33,6 +33,8 @@ import ww.wangnong.repository.UserNodeAccessRepository;
 import ww.wangnong.repository.UserRepository;
 import ww.wangnong.service.AlertService;
 
+import org.springframework.security.crypto.password.PasswordEncoder;
+
 @Component
 @ConditionalOnProperty(name = "hmht.run.mode", havingValue = "mock", matchIfMissing = true)
 public class MockDataLifecycle implements ApplicationRunner {
@@ -51,6 +53,7 @@ public class MockDataLifecycle implements ApplicationRunner {
     private final JdbcTemplate jdbc;
     @jakarta.annotation.Nullable
     private final InfluxTelemetryService influxService;
+    private final PasswordEncoder passwordEncoder;
 
     public MockDataLifecycle(UserRepository userRepo, NodeRepository nodeRepo,
             SensorTypeRepository sensorTypeRepo,
@@ -61,7 +64,8 @@ public class MockDataLifecycle implements ApplicationRunner {
             AlertService alertService,
             AlertRepository alertRepo,
             JdbcTemplate jdbc,
-            @Nullable InfluxTelemetryService influxService) {
+            @Nullable InfluxTelemetryService influxService,
+            PasswordEncoder passwordEncoder) {
         this.userRepo = userRepo;
         this.nodeRepo = nodeRepo;
         this.sensorTypeRepo = sensorTypeRepo;
@@ -73,6 +77,7 @@ public class MockDataLifecycle implements ApplicationRunner {
         this.alertRepo = alertRepo;
         this.jdbc = jdbc;
         this.influxService = influxService;
+        this.passwordEncoder = passwordEncoder;
     }
 
     @Override
@@ -118,7 +123,7 @@ public class MockDataLifecycle implements ApplicationRunner {
         User user = userRepo.findByPhone("13800000000").orElseGet(() -> {
             User u = new User();
             u.setPhone("13800000000");
-            u.setPasswordHash("123456");
+            u.setPasswordHash(passwordEncoder.encode("123456"));
             u.setUserName("农场主");
             u.setGender("男");
             u.setBirthDate(LocalDate.of(1990, 1, 1));
@@ -130,7 +135,7 @@ public class MockDataLifecycle implements ApplicationRunner {
         userRepo.findByPhone("13800000001").orElseGet(() -> {
             User a = new User();
             a.setPhone("13800000001");
-            a.setPasswordHash("admin123");
+            a.setPasswordHash(passwordEncoder.encode("admin123"));
             a.setUserName("管理员");
             a.setGender("男");
             a.setBirthDate(LocalDate.of(1985, 6, 15));

@@ -3,6 +3,7 @@ package ww.wangnong.service.impl;
 import java.util.List;
 
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import ww.wangnong.entity.Node;
 import ww.wangnong.entity.User;
@@ -72,6 +73,7 @@ public class DatabaseAdminService implements AdminService {
     }
 
     @Override
+    @Transactional
     public void deleteNode(String token, String nodeId) {
         User admin = authService.requireAdmin(token);
         Node node = nodeRepo.findByNodeId(nodeId)
@@ -110,6 +112,7 @@ public class DatabaseAdminService implements AdminService {
     }
 
     @Override
+    @Transactional
     public void setUserNodeIds(String token, long userId, List<String> nodeIds) {
         User admin = authService.requireAdmin(token);
         userNodeAccessRepo.deleteByUserId(userId);

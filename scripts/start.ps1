@@ -39,8 +39,8 @@
 #>
 param(
     [ValidateSet("mock", "bridge", "hardware", "full")]
-    [string]$Mode = "mock",
-    [string]$PythonDir = "d:\DevEcoStudioProjects\agri\agri_system\backend",
+    [string]$Mode = "full",
+    [string]$PythonDir = "d:\projects\ww\agri\agri_system\backend",
     [string]$JavaDir = "",
     [int]$AgriChatPort = 5000,
     [string]$InfluxDir = "C:\Users\mc_hi\Downloads\influxdb3-core-3.8.3-windows_amd64",

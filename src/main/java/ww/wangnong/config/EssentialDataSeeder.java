@@ -25,6 +25,8 @@ import ww.wangnong.repository.UserRepository;
 import ww.wangnong.config.RunMode;
 import ww.wangnong.config.RunModeHolder;
 
+import org.springframework.security.crypto.password.PasswordEncoder;
+
 /**
  * 全模式通用种子数据：确保 admin 用户、传感器类型、设备类型始终存在。
  * 在所有运行模式下都执行，使用 {@code existsBy*} 避免重复插入。
@@ -43,6 +45,7 @@ class EssentialDataSeeder implements ApplicationRunner {
     private final NodeSensorRepository nodeSensorRepo;
     private final NodeEquipmentRepository nodeEquipmentRepo;
     private final RunModeHolder runModeHolder;
+    private final PasswordEncoder passwordEncoder;
 
     EssentialDataSeeder(UserRepository userRepo,
             NodeRepository nodeRepo,
@@ -50,7 +53,8 @@ class EssentialDataSeeder implements ApplicationRunner {
             EquipmentTypeRepository equipmentTypeRepo,
             NodeSensorRepository nodeSensorRepo,
             NodeEquipmentRepository nodeEquipmentRepo,
-            RunModeHolder runModeHolder) {
+            RunModeHolder runModeHolder,
+            PasswordEncoder passwordEncoder) {
         this.userRepo = userRepo;
         this.nodeRepo = nodeRepo;
         this.sensorTypeRepo = sensorTypeRepo;
@@ -58,6 +62,7 @@ class EssentialDataSeeder implements ApplicationRunner {
         this.nodeSensorRepo = nodeSensorRepo;
         this.nodeEquipmentRepo = nodeEquipmentRepo;
         this.runModeHolder = runModeHolder;
+        this.passwordEncoder = passwordEncoder;
     }
 
     @Override
@@ -82,7 +87,7 @@ class EssentialDataSeeder implements ApplicationRunner {
         }
         User admin = new User();
         admin.setPhone("13800000001");
-        admin.setPasswordHash("admin123");
+        admin.setPasswordHash(passwordEncoder.encode("admin123"));
         admin.setUserName("管理员");
         admin.setGender("男");
         admin.setBirthDate(LocalDate.of(1985, 6, 15));

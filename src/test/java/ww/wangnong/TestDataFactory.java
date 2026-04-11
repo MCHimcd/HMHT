@@ -72,6 +72,15 @@ public final class TestDataFactory {
         return ns;
     }
 
+    /** NodeSensor with thresholds set — used by TelemetryAlertCheckerTest. */
+    public static NodeSensor nodeSensor(String nodeId, String sensorKey,
+            Double warningMin, Double warningMax) {
+        NodeSensor ns = nodeSensor(nodeId, sensorKey);
+        ns.setWarningMin(warningMin);
+        ns.setWarningMax(warningMax);
+        return ns;
+    }
+
     // ── EquipmentType ──
 
     public static EquipmentType equipmentType(String equipmentKey, String name) {

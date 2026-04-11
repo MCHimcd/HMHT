@@ -4,8 +4,10 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.time.Instant;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.util.Iterator;
 import java.util.Map;
 import java.util.Random;
 import java.util.Set;
@@ -15,6 +17,8 @@ import java.util.concurrent.ConcurrentHashMap;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.scheduling.annotation.Scheduled;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 
@@ -33,11 +37,13 @@ public class DatabaseAuthService implements AuthService {
     private static final Random RNG = new Random();
     private static final Set<String> ALLOWED_CONTENT_TYPES = Set.of("image/png", "image/jpeg", "image/jpg");
     private static final long MAX_FILE_SIZE = 5 * 1024 * 1024; // 5MB
+    private static final long TOKEN_TTL_SECONDS = 3600;
 
     private final UserRepository userRepo;
     private final VerificationCodeRepository codeRepo;
     private final OperationLogService opLog;
-    private final Map<String, Long> tokenToUserId = new ConcurrentHashMap<>();
+    private final PasswordEncoder passwordEncoder;
+    private final Map<String, TokenEntry> tokenStore = new ConcurrentHashMap<>();
 
     @Value("${hmht.upload.avatar-dir:uploads/avatars}")
     private String avatarDir;
@@ -46,23 +52,30 @@ public class DatabaseAuthService implements AuthService {
     private int serverPort;
 
     public DatabaseAuthService(UserRepository userRepo, VerificationCodeRepository codeRepo,
-            OperationLogService opLog) {
+            OperationLogService opLog, PasswordEncoder passwordEncoder) {
         this.userRepo = userRepo;
         this.codeRepo = codeRepo;
         this.opLog = opLog;
+        this.passwordEncoder = passwordEncoder;
+    }
+
+    private record TokenEntry(Long userId, Instant expiresAt) {
+        boolean isExpired() {
+            return Instant.now().isAfter(expiresAt);
+        }
     }
 
     @Override
     public LoginResult login(String username, String password) {
         User user = userRepo.findByPhone(username)
                 .orElseThrow(() -> new BizException(401, "用户名或密码错误"));
-        if (!user.getPasswordHash().equals(password)) {
+        if (!passwordEncoder.matches(password, user.getPasswordHash())) {
             throw new BizException(401, "用户名或密码错误");
         }
         String token = UUID.randomUUID().toString();
-        tokenToUserId.put(token, user.getId());
+        tokenStore.put(token, new TokenEntry(user.getId(), Instant.now().plusSeconds(TOKEN_TTL_SECONDS)));
         opLog.log("LOGIN", user.getId(), user.getUserName(), "user", String.valueOf(user.getId()), "登录成功");
-        return new LoginResult(token, 3600);
+        return new LoginResult(token, (int) TOKEN_TTL_SECONDS);
     }
 
     @Override
@@ -87,7 +100,7 @@ public class DatabaseAuthService implements AuthService {
         }
         User user = new User();
         user.setPhone(phone);
-        user.setPasswordHash(password);
+        user.setPasswordHash(passwordEncoder.encode(password));
         String suffix = phone.length() >= 4 ? phone.substring(phone.length() - 4) : phone;
         user.setUserName("用户" + suffix);
         userRepo.save(user);
@@ -98,7 +111,7 @@ public class DatabaseAuthService implements AuthService {
         verifyCode(phone, verificationCode);
         User user = userRepo.findByPhone(phone)
                 .orElseThrow(() -> new BizException(404, "用户不存在"));
-        user.setPasswordHash(newPassword);
+        user.setPasswordHash(passwordEncoder.encode(newPassword));
         userRepo.save(user);
     }
 
@@ -126,10 +139,10 @@ public class DatabaseAuthService implements AuthService {
     @Override
     public void changePassword(String token, String oldPassword, String newPassword) {
         User user = requireUser(token);
-        if (!user.getPasswordHash().equals(oldPassword)) {
+        if (!passwordEncoder.matches(oldPassword, user.getPasswordHash())) {
             throw new BizException(400, "旧密码错误");
         }
-        user.setPasswordHash(newPassword);
+        user.setPasswordHash(passwordEncoder.encode(newPassword));
         userRepo.save(user);
     }
 
@@ -206,9 +219,9 @@ public class DatabaseAuthService implements AuthService {
 
     @Override
     public void logout(String token) {
-        Long userId = tokenToUserId.remove(token);
-        if (userId != null) {
-            opLog.log("LOGOUT", userId, null, "user", String.valueOf(userId), "登出");
+        TokenEntry entry = tokenStore.remove(token);
+        if (entry != null) {
+            opLog.log("LOGOUT", entry.userId(), null, "user", String.valueOf(entry.userId()), "登出");
         }
     }
 
@@ -226,11 +239,31 @@ public class DatabaseAuthService implements AuthService {
 
     @Override
     public User requireUser(String token) {
-        Long userId = tokenToUserId.get(token);
-        if (userId == null)
+        TokenEntry entry = tokenStore.get(token);
+        if (entry == null || entry.isExpired()) {
+            if (entry != null) {
+                tokenStore.remove(token);
+            }
             throw new BizException(401, "未登录或 token 已过期");
-        return userRepo.findById(userId)
+        }
+        return userRepo.findById(entry.userId())
                 .orElseThrow(() -> new BizException(401, "用户不存在"));
+    }
+
+    /** 定期清理过期 token，防止内存泄漏。 */
+    @Scheduled(fixedDelay = 300_000, initialDelay = 300_000)
+    void evictExpiredTokens() {
+        Iterator<Map.Entry<String, TokenEntry>> it = tokenStore.entrySet().iterator();
+        int evicted = 0;
+        while (it.hasNext()) {
+            if (it.next().getValue().isExpired()) {
+                it.remove();
+                evicted++;
+            }
+        }
+        if (evicted > 0) {
+            log.debug("[Auth] Evicted {} expired tokens, remaining {}", evicted, tokenStore.size());
+        }
     }
 
     private Profile toProfile(User u) {

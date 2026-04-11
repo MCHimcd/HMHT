@@ -25,12 +25,10 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-import org.springframework.boot.test.system.CapturedOutput;
-import org.springframework.boot.test.system.OutputCaptureExtension;
 
 import ww.wangnong.config.RunMode;
 
-@ExtendWith({ MockitoExtension.class, OutputCaptureExtension.class })
+@ExtendWith(MockitoExtension.class)
 class PahoMqttServiceTest {
 
     @Mock
@@ -132,12 +130,13 @@ class PahoMqttServiceTest {
     }
 
     @Test
-    void publish_notConnected_skipsWithWarning(CapturedOutput output) {
+    void publish_notConnected_skipsWithoutPublish() throws Exception {
         PahoMqttService service = new PahoMqttService(properties, (uri, clientId) -> mqttClient);
 
         service.publish("/topic", "payload", 1, false);
 
-        assertThat(output).contains("Publish skipped");
+        // Not connected → publish should never be called on the client
+        verify(mqttClient, never()).publish(anyString(), any());
     }
 
     @Test
@@ -170,7 +169,7 @@ class PahoMqttServiceTest {
     }
 
     @Test
-    void publish_hardwareMode_logsPayloadToConsole(CapturedOutput output) throws Exception {
+    void publish_hardwareMode_delegatesToClient() throws Exception {
         when(mqttClient.connect(any(MqttConnectOptions.class))).thenReturn(connectToken);
         when(mqttClient.isConnected()).thenReturn(true);
         when(mqttClient.publish(anyString(), any())).thenReturn(deliveryToken);
@@ -180,9 +179,6 @@ class PahoMqttServiceTest {
 
         service.publish("/hmht/device/N01/command", "{\"command\":\"pump_on\"}", 1, false);
 
-        assertThat(output.getOut())
-                .contains("[MQTT][OUT]")
-                .contains("/hmht/device/N01/command")
-                .contains("{\"command\":\"pump_on\"}");
+        verify(mqttClient).publish(eq("/hmht/device/N01/command"), any());
     }
 }

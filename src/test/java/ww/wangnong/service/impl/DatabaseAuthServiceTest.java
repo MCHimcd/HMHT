@@ -20,6 +20,8 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.mock.web.MockMultipartFile;
+import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.web.multipart.MultipartFile;
 
 import ww.wangnong.entity.User;
@@ -42,18 +44,20 @@ class DatabaseAuthServiceTest {
     @Mock
     private OperationLogService opLog;
 
+    private final PasswordEncoder passwordEncoder = new BCryptPasswordEncoder();
+
     private DatabaseAuthService service;
 
     @BeforeEach
     void setUp() {
-        service = new DatabaseAuthService(userRepo, codeRepo, opLog);
+        service = new DatabaseAuthService(userRepo, codeRepo, opLog, passwordEncoder);
     }
 
     private User stubUser() {
         User u = new User();
         u.setId(1L);
         u.setPhone("13800000001");
-        u.setPasswordHash("password123");
+        u.setPasswordHash(passwordEncoder.encode("password123"));
         u.setUserName("测试用户");
         u.setRole("user");
         return u;

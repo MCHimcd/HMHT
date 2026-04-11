@@ -1,8 +1,8 @@
 package ww.wangnong.bridge;
 
-import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.atLeastOnce;
 import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
@@ -18,8 +18,6 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.InOrder;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-import org.springframework.boot.test.system.CapturedOutput;
-import org.springframework.boot.test.system.OutputCaptureExtension;
 
 import ww.wangnong.config.RunMode;
 import ww.wangnong.config.RunModeHolder;
@@ -32,7 +30,7 @@ import ww.wangnong.repository.NodeSensorRepository;
 import ww.wangnong.service.AlertService;
 import ww.wangnong.service.OperationLogService;
 
-@ExtendWith({ MockitoExtension.class, OutputCaptureExtension.class })
+@ExtendWith(MockitoExtension.class)
 class MqttBridgeTest {
 
         private static final int BRIDGE_QOS = 1;
@@ -185,7 +183,7 @@ class MqttBridgeTest {
         }
 
         @Test
-        void hardwareInboundMessages_allKinds_logsRawMqttEnvelope(CapturedOutput output) {
+        void hardwareInboundMessages_allKinds_processedByCallbacks() {
                 when(runModeHolder.isPythonRouteEnabled()).thenReturn(false);
                 when(runModeHolder.isHardwareRouteEnabled()).thenReturn(true);
                 when(runModeHolder.getMode()).thenReturn(RunMode.HARDWARE);
@@ -228,12 +226,12 @@ class MqttBridgeTest {
                                 1,
                                 false));
 
-                assertThat(output.getAll()).contains("[Bridge][HW-IN]");
-                assertThat(output.getAll()).contains("/hmht/device/N01/telemetry");
-                assertThat(output.getAll()).contains("/hmht/device/N01/capability");
-                assertThat(output.getAll()).contains("/hmht/device/N01/ack");
-                assertThat(output.getAll()).contains("qos=1");
-                assertThat(output.getAll()).contains("retained=false");
+                // Verify telemetry handler forwarded to app topic
+                verify(mqttService, atLeastOnce()).publishAsync(
+                                eq("/wangnong_2026/node/N01/telemetry"), any(), eq(1), eq(false));
+                // Verify capability handler processed the snapshot
+                verify(protocolPersistenceService, atLeastOnce()).recordCapabilitySnapshot(
+                                eq("N01"), any(), any(), any(), any(), any(), any(), any(), any());
         }
 
         @Test
