@@ -5,6 +5,9 @@ import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 import com.fasterxml.jackson.core.type.TypeReference;
@@ -14,6 +17,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
 
+import jakarta.annotation.PreDestroy;
 import jakarta.annotation.PostConstruct;
 import ww.wangnong.config.RunModeHolder;
 import ww.wangnong.config.condition.ConditionalOnBridgeMode;
@@ -76,6 +80,13 @@ public class MqttBridge {
     private final NodeEquipmentRepository nodeEquipmentRepo;
     private final AtomicBoolean realHardwareReceived = new AtomicBoolean(false);
     private final Set<String> capabilityBootstrapped = ConcurrentHashMap.newKeySet();
+    private final Set<String> hardwarePreferredDevices = ConcurrentHashMap.newKeySet();
+    private final ExecutorService telemetrySideEffectExecutor = Executors.newSingleThreadExecutor(
+            r -> {
+                Thread t = new Thread(r, "bridge-telemetry-sidefx");
+                t.setDaemon(true);
+                return t;
+            });
 
     public MqttBridge(PahoMqttService mqtt,
             AlertService alertService,
@@ -111,17 +122,27 @@ public class MqttBridge {
             subscriptionRegistry.register(PY_TELEMETRY, BRIDGE_QOS, msg -> {
                 try {
                     Map<String, Object> pyPayload = MAPPER.readValue(msg.payload(), MAP_TYPE);
+                    String deviceId = firstNonBlank(
+                            str(pyPayload.get("device_id")),
+                            extractDeviceId(msg.topic(), PY_TOPIC_PREFIX));
+                    if (enableHardwareRoute && shouldPreferHardwareTelemetry(deviceId)) {
+                        log.info(
+                                "[Bridge] Python telemetry ignored because real hardware is preferred: deviceId={}, topic={}",
+                                deviceId,
+                                msg.topic());
+                        protocolPersistenceService.recordIngestAudit(
+                                "telemetry",
+                                msg.topic(),
+                                deviceId,
+                                str(pyPayload.get("protocol_version")),
+                                str(pyPayload.get("trace_id")),
+                                "ignored_hardware_preferred",
+                                null);
+                        return;
+                    }
                     Map<String, Object> appPayload = TelemetryTranslator.pyToApp(pyPayload);
                     forwardTelemetry(msg.topic(), appPayload);
-
-                    protocolPersistenceService.recordIngestAudit(
-                            "telemetry",
-                            msg.topic(),
-                            str(pyPayload.get("device_id")),
-                            str(pyPayload.get("protocol_version")),
-                            str(pyPayload.get("trace_id")),
-                            "forwarded",
-                            null);
+                    processPythonTelemetrySideEffectsAsync(msg.topic(), pyPayload, deviceId);
                 } catch (Exception e) {
                     log.warn("[Bridge] Failed to bridge telemetry: {}", msg.topic(), e);
                     protocolPersistenceService.recordDeadletter(
@@ -175,27 +196,13 @@ public class MqttBridge {
                     }
 
                     String deviceId = str(hwPayload.get("device_id"));
-
-                    protocolPersistenceService.recordTelemetryHeartbeat(
-                            deviceId,
-                            toLong(hwPayload.get("timestamp")));
-
-                    // Auto-register capability from first telemetry if no capability snapshot
-                    // exists
-                    bootstrapCapabilityFromTelemetry(deviceId, hwPayload, msg.topic());
+                    if (!deviceId.isBlank()) {
+                        hardwarePreferredDevices.add(deviceId);
+                    }
 
                     Map<String, Object> appPayload = TelemetryTranslator.hardwareV2ToApp(hwPayload);
                     forwardTelemetry(msg.topic(), appPayload);
-                    retireSimNodeOnFirstRealHardware();
-
-                    protocolPersistenceService.recordIngestAudit(
-                            "telemetry",
-                            msg.topic(),
-                            deviceId,
-                            str(hwPayload.get("protocol_version")),
-                            str(hwPayload.get("trace_id")),
-                            "forwarded",
-                            null);
+                    processHardwareTelemetrySideEffectsAsync(msg.topic(), hwPayload, appPayload, deviceId);
                 } catch (Exception e) {
                     log.warn("[Bridge] Failed to bridge hardware telemetry: {}", msg.topic(), e);
                     protocolPersistenceService.recordDeadletter(
@@ -450,10 +457,55 @@ public class MqttBridge {
         }
 
         String appTopic = APP_TOPIC_PREFIX + nodeId + "/telemetry";
-        mqtt.publish(appTopic, MAPPER.writeValueAsString(appPayload), 1, false);
-        influxWriter.writeTelemetry(nodeId, appPayload);
-        alertChecker.checkAndAlert(nodeId, appPayload);
-        log.debug("[Bridge] Telemetry forwarded: {} → {}", sourceTopic, appTopic);
+        mqtt.publishAsync(appTopic, MAPPER.writeValueAsString(appPayload), 1, false);
+        log.debug("[Bridge] Telemetry enqueued for App publish: {} → {}", sourceTopic, appTopic);
+    }
+
+    private void processPythonTelemetrySideEffectsAsync(String sourceTopic, Map<String, Object> pyPayload,
+            String deviceId) {
+        telemetrySideEffectExecutor.execute(() -> protocolPersistenceService.recordIngestAudit(
+                "telemetry",
+                sourceTopic,
+                deviceId,
+                str(pyPayload.get("protocol_version")),
+                str(pyPayload.get("trace_id")),
+                "forwarded",
+                null));
+    }
+
+    private void processHardwareTelemetrySideEffectsAsync(String sourceTopic, Map<String, Object> hwPayload,
+            Map<String, Object> appPayload, String deviceId) {
+        telemetrySideEffectExecutor.execute(() -> {
+            protocolPersistenceService.recordTelemetryHeartbeat(
+                    deviceId,
+                    toLong(hwPayload.get("timestamp")));
+
+            bootstrapCapabilityFromTelemetry(deviceId, hwPayload, sourceTopic);
+            String nodeId = str(appPayload.get("node_id"));
+            if (!nodeId.isBlank()) {
+                influxWriter.writeTelemetry(nodeId, appPayload);
+                alertChecker.checkAndAlert(nodeId, appPayload);
+            }
+            retireSimNodeOnFirstRealHardware();
+            protocolPersistenceService.recordIngestAudit(
+                    "telemetry",
+                    sourceTopic,
+                    deviceId,
+                    str(hwPayload.get("protocol_version")),
+                    str(hwPayload.get("trace_id")),
+                    "forwarded",
+                    null);
+        });
+    }
+
+    @PreDestroy
+    public void shutdownTelemetrySideEffects() {
+        telemetrySideEffectExecutor.shutdown();
+        try {
+            telemetrySideEffectExecutor.awaitTermination(5, TimeUnit.SECONDS);
+        } catch (InterruptedException ignored) {
+            Thread.currentThread().interrupt();
+        }
     }
 
     @SuppressWarnings("unchecked")
@@ -742,5 +794,9 @@ public class MqttBridge {
             nodeRepo.delete(node);
             log.info("[Bridge] Real hardware detected — SIM node {} retired.", simId);
         });
+    }
+
+    private boolean shouldPreferHardwareTelemetry(String deviceId) {
+        return deviceId != null && !deviceId.isBlank() && hardwarePreferredDevices.contains(deviceId);
     }
 }

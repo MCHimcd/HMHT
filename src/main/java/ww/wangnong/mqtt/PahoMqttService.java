@@ -42,7 +42,17 @@ public class PahoMqttService {
     private final Map<String, SubscriptionBinding> subscriptions = new ConcurrentHashMap<>();
     private static final AtomicInteger HANDLER_THREAD_SEQ = new AtomicInteger(0);
     private final ExecutorService handlerExecutor = Executors.newFixedThreadPool(4,
-            r -> { Thread t = new Thread(r, "mqtt-handler-" + HANDLER_THREAD_SEQ.getAndIncrement()); t.setDaemon(true); return t; });
+            r -> {
+                Thread t = new Thread(r, "mqtt-handler-" + HANDLER_THREAD_SEQ.getAndIncrement());
+                t.setDaemon(true);
+                return t;
+            });
+    private final ExecutorService telemetryExecutor = Executors.newSingleThreadExecutor(
+            r -> {
+                Thread t = new Thread(r, "mqtt-telemetry-handler");
+                t.setDaemon(true);
+                return t;
+            });
     private final ExecutorService commandExecutor = Executors.newSingleThreadExecutor(
             r -> {
                 Thread t = new Thread(r, "mqtt-command-handler");
@@ -254,9 +264,11 @@ public class PahoMqttService {
             return;
         }
 
+        telemetryExecutor.shutdown();
         commandExecutor.shutdown();
         handlerExecutor.shutdown();
         try {
+            telemetryExecutor.awaitTermination(5, TimeUnit.SECONDS);
             commandExecutor.awaitTermination(5, TimeUnit.SECONDS);
             handlerExecutor.awaitTermination(5, TimeUnit.SECONDS);
         } catch (InterruptedException ignored) {
@@ -341,7 +353,7 @@ public class PahoMqttService {
                 return;
             }
 
-            ExecutorService executor = isCommandTopic(topicFilter, topic) ? commandExecutor : handlerExecutor;
+            ExecutorService executor = selectExecutor(topicFilter, topic);
             executor.execute(() -> {
                 try {
                     binding.handler().accept(inbound);
@@ -355,6 +367,21 @@ public class PahoMqttService {
     private boolean isCommandTopic(String topicFilter, String topic) {
         return (topicFilter != null && topicFilter.endsWith("/command"))
                 || (topic != null && topic.endsWith("/command"));
+    }
+
+    private boolean isTelemetryTopic(String topicFilter, String topic) {
+        return (topicFilter != null && topicFilter.endsWith("/telemetry"))
+                || (topic != null && topic.endsWith("/telemetry"));
+    }
+
+    private ExecutorService selectExecutor(String topicFilter, String topic) {
+        if (isCommandTopic(topicFilter, topic)) {
+            return commandExecutor;
+        }
+        if (isTelemetryTopic(topicFilter, topic)) {
+            return telemetryExecutor;
+        }
+        return handlerExecutor;
     }
 
     private int normalizeQos(int qos) {

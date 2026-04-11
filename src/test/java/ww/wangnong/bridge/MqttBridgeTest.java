@@ -3,6 +3,7 @@ package ww.wangnong.bridge;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -14,6 +15,7 @@ import java.util.function.Consumer;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
+import org.mockito.InOrder;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.boot.test.system.CapturedOutput;
@@ -266,6 +268,95 @@ class MqttBridgeTest {
                                 eq("/wangnong_2026/node/A03_Node_01/command"),
                                 eq("/hmht/device/A03_Node_01/command"),
                                 any());
+        }
+
+        @Test
+        void hardwareTelemetry_hardwareMode_forwardsToAppTopicViaPublishAsync() {
+                when(runModeHolder.isPythonRouteEnabled()).thenReturn(false);
+                when(runModeHolder.isHardwareRouteEnabled()).thenReturn(true);
+                when(runModeHolder.getMode()).thenReturn(RunMode.HARDWARE);
+
+                MqttBridge bridge = new MqttBridge(
+                                mqttService,
+                                alertService,
+                                influxTelemetryWriter,
+                                subscriptionRegistry,
+                                protocolPersistenceService,
+                                runModeHolder,
+                                alertChecker,
+                                simNodeSimulator,
+                                nodeRepository,
+                                nodeSensorRepository,
+                                nodeEquipmentRepository);
+
+                bridge.init();
+
+                Consumer<PahoMqttService.InboundMessage> hwTelemetryHandler = captureHandler(HW_TELEMETRY);
+                hwTelemetryHandler.accept(new PahoMqttService.InboundMessage(
+                                "/hmht/device/A03_Node_01/telemetry",
+                                "{\"msg_type\":\"telemetry\",\"protocol_version\":\"2.0\",\"device_id\":\"A03_Node_01\",\"timestamp\":1484747,\"trace_id\":\"hw-trace\",\"payload\":{\"sensors\":{\"air_temp\":{\"value\":24.2,\"unit\":\"C\"}},\"equipments\":{\"water_pump\":{\"state\":\"on\"}},\"mode\":\"smart\"}}",
+                                1,
+                                false));
+
+                verify(mqttService).publishAsync(eq("/wangnong_2026/node/A03_Node_01/telemetry"), any(), eq(1),
+                                eq(false));
+                verify(mqttService, never()).publish(eq("/wangnong_2026/node/A03_Node_01/telemetry"), any(), eq(1),
+                                eq(false));
+
+                InOrder inOrder = inOrder(mqttService, protocolPersistenceService);
+                inOrder.verify(mqttService).publishAsync(eq("/wangnong_2026/node/A03_Node_01/telemetry"), any(),
+                                eq(1), eq(false));
+                inOrder.verify(protocolPersistenceService).recordTelemetryHeartbeat(eq("A03_Node_01"), eq(1484747L));
+        }
+
+        @Test
+        void fullMode_pythonTelemetry_isIgnoredAfterRealHardwareTelemetryForSameDevice() {
+                when(runModeHolder.isPythonRouteEnabled()).thenReturn(true);
+                when(runModeHolder.isHardwareRouteEnabled()).thenReturn(true);
+                when(runModeHolder.getMode()).thenReturn(RunMode.FULL);
+
+                MqttBridge bridge = new MqttBridge(
+                                mqttService,
+                                alertService,
+                                influxTelemetryWriter,
+                                subscriptionRegistry,
+                                protocolPersistenceService,
+                                runModeHolder,
+                                alertChecker,
+                                simNodeSimulator,
+                                nodeRepository,
+                                nodeSensorRepository,
+                                nodeEquipmentRepository);
+
+                bridge.init();
+
+                Consumer<PahoMqttService.InboundMessage> hwTelemetryHandler = captureHandler(HW_TELEMETRY);
+                Consumer<PahoMqttService.InboundMessage> pyTelemetryHandler = captureHandler(PY_TELEMETRY);
+
+                hwTelemetryHandler.accept(new PahoMqttService.InboundMessage(
+                                "/hmht/device/A03_Node_01/telemetry",
+                                "{\"msg_type\":\"telemetry\",\"protocol_version\":\"2.0\",\"device_id\":\"A03_Node_01\",\"timestamp\":1484747,\"trace_id\":\"hw-trace\",\"payload\":{\"sensors\":{\"air_temp\":{\"value\":24.2,\"unit\":\"C\"}},\"equipments\":{\"water_pump\":{\"state\":\"on\"}},\"mode\":\"smart\"}}",
+                                1,
+                                false));
+
+                pyTelemetryHandler.accept(new PahoMqttService.InboundMessage(
+                                "/agri/device/A03_Node_01/telemetry",
+                                "{\"device_id\":\"A03_Node_01\",\"timestamp\":932406,\"msg_type\":\"telemetry\",\"data\":{\"environment\":{\"air_temp\":23.8},\"equipment_status\":{\"water_pump\":false,\"fan\":false},\"system_mode\":\"manual\"}}",
+                                1,
+                                false));
+
+                verify(mqttService, times(1)).publishAsync(eq("/wangnong_2026/node/A03_Node_01/telemetry"), any(),
+                                eq(1), eq(false));
+                verify(mqttService, never()).publish(eq("/wangnong_2026/node/A03_Node_01/telemetry"), any(), eq(1),
+                                eq(false));
+                verify(protocolPersistenceService).recordIngestAudit(
+                                eq("telemetry"),
+                                eq("/agri/device/A03_Node_01/telemetry"),
+                                eq("A03_Node_01"),
+                                eq(""),
+                                eq(""),
+                                eq("ignored_hardware_preferred"),
+                                eq(null));
         }
 
         @SuppressWarnings({ "rawtypes", "unchecked" })

@@ -70,6 +70,8 @@ HMHT/
 
 组件通过 `config/condition/` 包中的 5 个自定义条件注解（`@ConditionalOnMockMode` / `@ConditionalOnBridgeMode` / `@ConditionalOnPythonRoute` / `@ConditionalOnHardwareRoute` / `@ConditionalOnNoPythonRoute`）按模式激活，详见 `.github/instructions/java.instructions.md`。
 
+说明：`full` 模式下若同一 `deviceId` 同时存在 Python telemetry 与真实硬件 telemetry，桥接层会在首次收到真实硬件 telemetry 后优先采用硬件数据，并忽略后续同设备的 Python telemetry 覆盖。
+
 > **V2 阶段能力**：硬件 telemetry/command/ack 全链路打通；设备能力与影子查询；命令 ACK 超时重试闭环（5s 超时、3 次重试）；控制面持久化。协议规范见 [docs/backend-hardware-protocol.md](docs/backend-hardware-protocol.md)。
 
 ### 环境变量
@@ -211,6 +213,8 @@ Service 接口（`ww.wangnong.service`）根据运行模式由不同实现提供
 ## MQTT 协议
 
 协议详情见 [docs/backend-hardware-protocol.md](docs/backend-hardware-protocol.md)，主题与桥接实现详见 `.github/instructions/mqtt.instructions.md`。
+
+桥接层实现说明：命令与 telemetry 使用独立处理通道；telemetry 按单独有序执行通道处理，避免旧状态在高负载下晚到覆盖新状态。
 
 ### 硬件直连主题（V2）
 

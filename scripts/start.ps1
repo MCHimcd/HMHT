@@ -146,7 +146,16 @@ function Write-WorkerStatus {
         updatedAt = (Get-Date).ToString("yyyy-MM-dd HH:mm:ss")
     }
 
-    $payload | ConvertTo-Json -Depth 4 | Set-Content -Path $StatusFile -Encoding UTF8
+    $json = $payload | ConvertTo-Json -Depth 4
+    $tmpFile = $StatusFile + ".tmp"
+    try {
+        $json | Set-Content -Path $tmpFile -Encoding UTF8
+        Move-Item -Path $tmpFile -Destination $StatusFile -Force
+    }
+    catch {
+        # 竞态写入失败时静默忽略，下次循环会重试
+        Remove-Item -Path $tmpFile -Force -ErrorAction SilentlyContinue
+    }
 }
 
 function Read-ServiceStatus {
