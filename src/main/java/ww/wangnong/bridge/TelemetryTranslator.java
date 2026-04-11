@@ -143,6 +143,13 @@ public final class TelemetryTranslator {
             appData.put("mode", modeObj);
         }
 
+        // image_base64: camera frame from hardware, pass-through to App
+        // Strip data-URI prefix (e.g. "data:image/jpeg;base64,") if hardware sends it
+        Object imageBase64 = payload.get("image_base64");
+        if (imageBase64 instanceof String s && !s.isBlank()) {
+            appData.put("image_base64", stripDataUriPrefix(s));
+        }
+
         Object protocolVersion = hwPayload.get("protocol_version");
         if (protocolVersion != null) {
             appData.put("protocol_version", protocolVersion);
@@ -198,6 +205,20 @@ public final class TelemetryTranslator {
         return valueOrMap;
     }
 
+    private static final String DATA_URI_PREFIX = ";base64,";
+
+    /**
+     * Strip {@code data:<mime>;base64,} prefix if present; return pure base64
+     * string.
+     */
+    static String stripDataUriPrefix(String value) {
+        int idx = value.indexOf(DATA_URI_PREFIX);
+        if (idx >= 0) {
+            return value.substring(idx + DATA_URI_PREFIX.length());
+        }
+        return value;
+    }
+
     /**
      * Convert equipment state to boolean.
      * Handles string "on"/"off", boolean, and numeric values.
@@ -213,5 +234,18 @@ public final class TelemetryTranslator {
             return n.intValue() != 0;
         }
         return false;
+    }
+
+    /**
+     * Shorten {@code image_base64} in raw JSON for readable log output.
+     * Values longer than 20 characters are replaced with {@code <image_present>}.
+     */
+    public static String briefPayload(String raw) {
+        if (raw != null && raw.contains("\"image_base64\"")) {
+            return raw.replaceFirst(
+                    "\"image_base64\"\\s*:\\s*\"[^\"]{20,}\"",
+                    "\"image_base64\":\"<image_present>\"");
+        }
+        return raw;
     }
 }

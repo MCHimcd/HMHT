@@ -1,5 +1,8 @@
 package ww.wangnong.service;
 
+import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.time.LocalTime;
 import java.util.List;
 
 import org.springframework.data.domain.Page;
@@ -57,6 +60,26 @@ public class OperationLogService {
         return new LogPage((int) result.getTotalElements(), items);
     }
 
+    public LogPage listFiltered(int page, int size, String filterType, String targetId,
+            String startDate, String endDate) {
+        Pageable pageable = PageRequest.of(Math.max(0, page - 1), Math.max(1, Math.min(size, 100)));
+
+        String opType = (filterType != null && !filterType.isBlank()) ? filterType : null;
+        String tid = (targetId != null && !targetId.isBlank()) ? targetId : null;
+        LocalDateTime startTime = parseStartDate(startDate);
+        LocalDateTime endTime = parseEndDate(endDate);
+
+        Page<OperationLog> result = repo.findFiltered(opType, tid, startTime, endTime, pageable);
+
+        List<LogItem> items = result.getContent().stream()
+                .map(e -> new LogItem(e.getId(), e.getUserId(), e.getUserName(),
+                        e.getOperationType(), e.getTargetType(), e.getTargetId(),
+                        e.getDetail(),
+                        e.getCreatedAt() != null ? e.getCreatedAt().toString() : null))
+                .toList();
+        return new LogPage((int) result.getTotalElements(), items);
+    }
+
     public LogPage listByUser(Long userId, int page, int size) {
         Pageable pageable = PageRequest.of(Math.max(0, page - 1), Math.max(1, Math.min(size, 100)));
         Page<OperationLog> result = repo.findByUserIdOrderByCreatedAtDesc(userId, pageable);
@@ -67,5 +90,19 @@ public class OperationLogService {
                         e.getCreatedAt() != null ? e.getCreatedAt().toString() : null))
                 .toList();
         return new LogPage((int) result.getTotalElements(), items);
+    }
+
+    private LocalDateTime parseStartDate(String dateStr) {
+        if (dateStr == null || dateStr.isBlank()) {
+            return null;
+        }
+        return LocalDate.parse(dateStr).atStartOfDay();
+    }
+
+    private LocalDateTime parseEndDate(String dateStr) {
+        if (dateStr == null || dateStr.isBlank()) {
+            return null;
+        }
+        return LocalDate.parse(dateStr).atTime(LocalTime.MAX);
     }
 }

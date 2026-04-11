@@ -212,4 +212,117 @@ class TelemetryTranslatorTest {
         assertThat(env.get("soilHumidity")).isEqualTo(41.2);
         assertThat(equipment.get("fan")).isEqualTo(true);
     }
+
+    @Test
+    void hardwareV2ToApp_passesThrough_imageBase64() {
+        Map<String, Object> hwPayload = new LinkedHashMap<>();
+        hwPayload.put("msg_type", "telemetry");
+        hwPayload.put("device_id", "D01");
+        hwPayload.put("timestamp", 1700000000000L);
+
+        Map<String, Object> payload = new LinkedHashMap<>();
+        payload.put("sensors", Map.of("air_temp", Map.of("value", 25.0)));
+        payload.put("image_base64", "/9j/4AAQSkZJRg==");
+        hwPayload.put("payload", payload);
+
+        Map<String, Object> result = TelemetryTranslator.hardwareV2ToApp(hwPayload);
+
+        @SuppressWarnings("unchecked")
+        Map<String, Object> data = (Map<String, Object>) result.get("data");
+        assertThat(data.get("image_base64")).isEqualTo("/9j/4AAQSkZJRg==");
+    }
+
+    @Test
+    void hardwareV2ToApp_stripsDataUriPrefix_fromImageBase64() {
+        Map<String, Object> hwPayload = new LinkedHashMap<>();
+        hwPayload.put("msg_type", "telemetry");
+        hwPayload.put("device_id", "D01");
+        hwPayload.put("timestamp", 1700000000000L);
+
+        Map<String, Object> payload = new LinkedHashMap<>();
+        payload.put("sensors", Map.of("air_temp", Map.of("value", 25.0)));
+        payload.put("image_base64", "data:image/jpeg;base64,/9j/4AAQSkZJRg==");
+        hwPayload.put("payload", payload);
+
+        Map<String, Object> result = TelemetryTranslator.hardwareV2ToApp(hwPayload);
+
+        @SuppressWarnings("unchecked")
+        Map<String, Object> data = (Map<String, Object>) result.get("data");
+        assertThat(data.get("image_base64")).isEqualTo("/9j/4AAQSkZJRg==");
+    }
+
+    @Test
+    void hardwareV2ToApp_stripsDataUriPrefix_png() {
+        Map<String, Object> hwPayload = new LinkedHashMap<>();
+        hwPayload.put("msg_type", "telemetry");
+        hwPayload.put("device_id", "D01");
+        hwPayload.put("timestamp", 1700000000000L);
+
+        Map<String, Object> payload = new LinkedHashMap<>();
+        payload.put("sensors", Map.of("air_temp", Map.of("value", 25.0)));
+        payload.put("image_base64", "data:image/png;base64,iVBORw0KGgoAAAA==");
+        hwPayload.put("payload", payload);
+
+        Map<String, Object> result = TelemetryTranslator.hardwareV2ToApp(hwPayload);
+
+        @SuppressWarnings("unchecked")
+        Map<String, Object> data = (Map<String, Object>) result.get("data");
+        assertThat(data.get("image_base64")).isEqualTo("iVBORw0KGgoAAAA==");
+    }
+
+    @Test
+    void hardwareV2ToApp_omitsImageBase64_whenAbsent() {
+        Map<String, Object> hwPayload = new LinkedHashMap<>();
+        hwPayload.put("msg_type", "telemetry");
+        hwPayload.put("device_id", "D01");
+        hwPayload.put("timestamp", 1700000000000L);
+
+        Map<String, Object> payload = new LinkedHashMap<>();
+        payload.put("sensors", Map.of("air_temp", Map.of("value", 25.0)));
+        hwPayload.put("payload", payload);
+
+        Map<String, Object> result = TelemetryTranslator.hardwareV2ToApp(hwPayload);
+
+        @SuppressWarnings("unchecked")
+        Map<String, Object> data = (Map<String, Object>) result.get("data");
+        assertThat(data).doesNotContainKey("image_base64");
+    }
+
+    // ── briefPayload tests ──
+
+    @Test
+    void briefPayload_truncatesLongImageBase64() {
+        String json = "{\"mode\":\"smart\",\"image_base64\":\"/9j/4AAQSkZJRgABAQAAAAA12345678901234567890\",\"trace_id\":\"abc\"}";
+        String result = TelemetryTranslator.briefPayload(json);
+        assertThat(result).contains("\"image_base64\":\"<image_present>\"");
+        assertThat(result).contains("\"trace_id\":\"abc\"");
+        assertThat(result).doesNotContain("/9j/4AAQ");
+    }
+
+    @Test
+    void briefPayload_preservesPayloadWithoutImage() {
+        String json = "{\"mode\":\"smart\",\"trace_id\":\"abc\"}";
+        String result = TelemetryTranslator.briefPayload(json);
+        assertThat(result).isEqualTo(json);
+    }
+
+    @Test
+    void briefPayload_preservesShortImageBase64() {
+        String json = "{\"image_base64\":\"short\"}";
+        String result = TelemetryTranslator.briefPayload(json);
+        assertThat(result).isEqualTo(json);
+    }
+
+    @Test
+    void briefPayload_returnsNullForNull() {
+        assertThat(TelemetryTranslator.briefPayload(null)).isNull();
+    }
+
+    @Test
+    void briefPayload_handlesSpacesAroundColon() {
+        String json = "{\"image_base64\" : \"/9j/4AAQSkZJRgABAQAAAAA12345678901234567890\"}";
+        String result = TelemetryTranslator.briefPayload(json);
+        assertThat(result).contains("<image_present>");
+        assertThat(result).doesNotContain("/9j/4AAQ");
+    }
 }

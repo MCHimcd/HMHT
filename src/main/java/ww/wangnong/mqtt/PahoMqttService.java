@@ -27,6 +27,7 @@ import org.springframework.stereotype.Service;
 
 import jakarta.annotation.PostConstruct;
 import jakarta.annotation.PreDestroy;
+import ww.wangnong.bridge.TelemetryTranslator;
 import ww.wangnong.config.RunMode;
 import ww.wangnong.config.RunModeHolder;
 
@@ -175,7 +176,7 @@ public class PahoMqttService {
                         targetTopic,
                         normalizedQos,
                         retained,
-                        payload);
+                        TelemetryTranslator.briefPayload(payload));
             } else {
                 log.debug("MQTT message published: topic={}, qos={}, retained={}", targetTopic, normalizedQos,
                         retained);
@@ -210,7 +211,8 @@ public class PahoMqttService {
             message.setRetained(retained);
 
             client.publish(targetTopic, message);
-            log.info("[MQTT][ASYNC-OUT] topic={}, qos={}, payload={}", targetTopic, normalizedQos, payload);
+            log.info("[MQTT][ASYNC-OUT] topic={}, qos={}, payload={}", targetTopic, normalizedQos,
+                    TelemetryTranslator.briefPayload(payload));
         } catch (MqttException e) {
             log.warn("[MQTT] PublishAsync failed: topic={}", targetTopic, e);
         }

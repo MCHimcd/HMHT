@@ -29,6 +29,7 @@ import ww.wangnong.repository.NodeRepository;
 import ww.wangnong.repository.NodeSensorRepository;
 import ww.wangnong.service.AlertService;
 import ww.wangnong.service.AlertService.AlertInfo;
+import ww.wangnong.service.OperationLogService;
 
 /**
  * MQTT topic bridge between Python (agri) and App (wangnong).
@@ -78,6 +79,7 @@ public class MqttBridge {
     private final NodeRepository nodeRepo;
     private final NodeSensorRepository nodeSensorRepo;
     private final NodeEquipmentRepository nodeEquipmentRepo;
+    private final OperationLogService opLogService;
     private final AtomicBoolean realHardwareReceived = new AtomicBoolean(false);
     private final Set<String> capabilityBootstrapped = ConcurrentHashMap.newKeySet();
     private final Set<String> hardwarePreferredDevices = ConcurrentHashMap.newKeySet();
@@ -98,7 +100,8 @@ public class MqttBridge {
             SimNodeSimulator simNodeSimulator,
             NodeRepository nodeRepo,
             NodeSensorRepository nodeSensorRepo,
-            NodeEquipmentRepository nodeEquipmentRepo) {
+            NodeEquipmentRepository nodeEquipmentRepo,
+            OperationLogService opLogService) {
         this.mqtt = mqtt;
         this.alertService = alertService;
         this.influxWriter = influxWriter;
@@ -110,6 +113,7 @@ public class MqttBridge {
         this.nodeRepo = nodeRepo;
         this.nodeSensorRepo = nodeSensorRepo;
         this.nodeEquipmentRepo = nodeEquipmentRepo;
+        this.opLogService = opLogService;
     }
 
     @PostConstruct
@@ -186,7 +190,7 @@ public class MqttBridge {
                         msg.topic(),
                         msg.qos(),
                         msg.retained(),
-                        msg.payload());
+                        TelemetryTranslator.briefPayload(msg.payload()));
                 try {
                     Map<String, Object> hwPayload = MAPPER.readValue(msg.payload(), MAP_TYPE);
                     String topicDeviceId = extractDeviceId(msg.topic(), HW_TOPIC_PREFIX);
@@ -387,6 +391,29 @@ public class MqttBridge {
                         traceId,
                         "forwarded",
                         null);
+
+                // Log DEVICE_CONTROL operation for the device detail page
+                try {
+                    Map<String, Object> cmdPayload = MAPPER.readValue(msg.payload(), MAP_TYPE);
+                    Object actionObj = cmdPayload.get("action");
+                    if (actionObj instanceof Map<?, ?> actionMap) {
+                        String targetDevice = str(actionMap.get("target_device"));
+                        String command = str(actionMap.get("command"));
+                        String source = str(cmdPayload.get("source"));
+                        if (source.isBlank()) {
+                            source = "manual";
+                        }
+                        if (!targetDevice.isBlank() && !command.isBlank()) {
+                            String detail = "mode".equals(targetDevice)
+                                    ? "{\"action\":\"" + command + "\",\"mode\":\"" + command
+                                            + "\",\"source\":\"" + source + "\"}"
+                                    : "{\"action\":\"" + command + "\",\"source\":\"" + source + "\"}";
+                            opLogService.log("DEVICE_CONTROL", null, null, "equipment", targetDevice, detail);
+                        }
+                    }
+                } catch (Exception logEx) {
+                    log.warn("[Bridge] Failed to log DEVICE_CONTROL operation", logEx);
+                }
 
                 if (enablePythonRoute && enableHardwareRoute) {
                     log.debug("[Bridge] Command forwarded: {} → {} and {}", topic, pyTopic, hwTopic);

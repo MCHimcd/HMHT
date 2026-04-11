@@ -30,6 +30,7 @@ import ww.wangnong.repository.NodeEquipmentRepository;
 import ww.wangnong.repository.NodeRepository;
 import ww.wangnong.repository.NodeSensorRepository;
 import ww.wangnong.service.AlertService;
+import ww.wangnong.service.OperationLogService;
 
 @ExtendWith({ MockitoExtension.class, OutputCaptureExtension.class })
 class MqttBridgeTest {
@@ -76,6 +77,9 @@ class MqttBridgeTest {
         @Mock
         private NodeEquipmentRepository nodeEquipmentRepository;
 
+        @Mock
+        private OperationLogService opLogService;
+
         @Test
         void init_bridgeMode_registersPythonRoutesOnly() {
                 when(runModeHolder.isPythonRouteEnabled()).thenReturn(true);
@@ -93,7 +97,8 @@ class MqttBridgeTest {
                                 simNodeSimulator,
                                 nodeRepository,
                                 nodeSensorRepository,
-                                nodeEquipmentRepository);
+                                nodeEquipmentRepository,
+                                opLogService);
 
                 bridge.init();
 
@@ -127,7 +132,8 @@ class MqttBridgeTest {
                                 simNodeSimulator,
                                 nodeRepository,
                                 nodeSensorRepository,
-                                nodeEquipmentRepository);
+                                nodeEquipmentRepository,
+                                opLogService);
 
                 bridge.init();
 
@@ -161,7 +167,8 @@ class MqttBridgeTest {
                                 simNodeSimulator,
                                 nodeRepository,
                                 nodeSensorRepository,
-                                nodeEquipmentRepository);
+                                nodeEquipmentRepository,
+                                opLogService);
 
                 bridge.init();
 
@@ -194,7 +201,8 @@ class MqttBridgeTest {
                                 simNodeSimulator,
                                 nodeRepository,
                                 nodeSensorRepository,
-                                nodeEquipmentRepository);
+                                nodeEquipmentRepository,
+                                opLogService);
 
                 bridge.init();
 
@@ -245,7 +253,8 @@ class MqttBridgeTest {
                                 simNodeSimulator,
                                 nodeRepository,
                                 nodeSensorRepository,
-                                nodeEquipmentRepository);
+                                nodeEquipmentRepository,
+                                opLogService);
 
                 bridge.init();
 
@@ -287,7 +296,8 @@ class MqttBridgeTest {
                                 simNodeSimulator,
                                 nodeRepository,
                                 nodeSensorRepository,
-                                nodeEquipmentRepository);
+                                nodeEquipmentRepository,
+                                opLogService);
 
                 bridge.init();
 
@@ -326,7 +336,8 @@ class MqttBridgeTest {
                                 simNodeSimulator,
                                 nodeRepository,
                                 nodeSensorRepository,
-                                nodeEquipmentRepository);
+                                nodeEquipmentRepository,
+                                opLogService);
 
                 bridge.init();
 

@@ -21,6 +21,7 @@ import ww.wangnong.influx.InfluxTelemetryService;
 import ww.wangnong.mqtt.PahoMqttService;
 import ww.wangnong.repository.NodeSensorRepository;
 import ww.wangnong.service.AlertService;
+import ww.wangnong.service.OperationLogService;
 
 @Component
 @ConditionalOnProperty(name = "hmht.run.mode", havingValue = "mock", matchIfMissing = true)
@@ -38,6 +39,7 @@ public class MockMqttSimulator {
     private final InfluxTelemetryService influxService;
     private final NodeSensorRepository nodeSensorRepo;
     private final AlertService alertService;
+    private final OperationLogService opLogService;
 
     /** Per-node environment data: nodeId -> (sensorKey -> value) */
     private final ConcurrentHashMap<String, ConcurrentHashMap<String, Double>> nodeEnvironments = new ConcurrentHashMap<>();
@@ -69,11 +71,13 @@ public class MockMqttSimulator {
     public MockMqttSimulator(PahoMqttService mqttService,
             @org.jspecify.annotations.Nullable InfluxTelemetryService influxService,
             NodeSensorRepository nodeSensorRepo,
-            AlertService alertService) {
+            AlertService alertService,
+            OperationLogService opLogService) {
         this.mqttService = mqttService;
         this.influxService = influxService;
         this.nodeSensorRepo = nodeSensorRepo;
         this.alertService = alertService;
+        this.opLogService = opLogService;
 
         for (String nodeId : NODE_IDS) {
             ConcurrentHashMap<String, Double> env = new ConcurrentHashMap<>();
@@ -177,11 +181,17 @@ public class MockMqttSimulator {
         if ("mode".equals(targetDevice)) {
             nodeModes.put(nodeId, command);
             log.info("[MockMqtt] {} mode changed to: {}", nodeId, command);
+            opLogService.log("DEVICE_CONTROL", null, null,
+                    "equipment", targetDevice,
+                    "{\"action\":\"" + command + "\",\"mode\":\"" + command + "\"}");
         } else {
             ConcurrentHashMap<String, Boolean> eq = nodeEquipments.get(nodeId);
             if (eq != null && eq.containsKey(targetDevice)) {
                 eq.put(targetDevice, "turn_on".equals(command));
                 log.info("[MockMqtt] {} {} = {}", nodeId, targetDevice, eq.get(targetDevice));
+                opLogService.log("DEVICE_CONTROL", null, null,
+                        "equipment", targetDevice,
+                        "{\"action\":\"" + command + "\"}");
             }
         }
     }

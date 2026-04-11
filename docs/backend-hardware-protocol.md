@@ -97,7 +97,8 @@
       "state": "standby"
     }
   },
-  "mode": "manual"
+  "mode": "manual",
+  "image_base64": "/9j/4AAQSkZJRg=="
 }
 ```
 
@@ -107,6 +108,7 @@
 - 后端必须允许未知 key 透传、落库和查询，不可直接丢弃。
 - 推荐 key 使用小写蛇形命名：`[a-z0-9_]+`。
 - `mode` 为可选字段，推荐值：`manual`/`auto`/`smart`。
+- `image_base64` 为可选字段，表示摄像头当前帧的 Base64 编码（JPEG 推荐，建议压缩至 200KB 以内）。后端透传至 App 端 `data.image_base64`，不写入 InfluxDB，不进入趋势缓存。
 
 ### 4.3 单项定义
 
