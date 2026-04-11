@@ -1,6 +1,7 @@
 package ww.wangnong.config;
 
 import java.time.LocalDate;
+import java.util.Optional;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -82,8 +83,16 @@ class EssentialDataSeeder implements ApplicationRunner {
     }
 
     private boolean ensureAdmin() {
-        if (userRepo.existsByPhone("13800000001")) {
-            return false;
+        Optional<User> existingAdmin = userRepo.findByPhone("13800000001");
+        if (existingAdmin.isPresent()) {
+            User admin = existingAdmin.get();
+            if (!requiresLegacyDefaultPasswordUpgrade(admin)) {
+                return false;
+            }
+            admin.setPasswordHash(passwordEncoder.encode("admin123"));
+            userRepo.save(admin);
+            log.info("[EssentialData] 已自动升级管理员默认密码为 BCrypt 哈希。");
+            return true;
         }
         User admin = new User();
         admin.setPhone("13800000001");
@@ -95,6 +104,10 @@ class EssentialDataSeeder implements ApplicationRunner {
         userRepo.save(admin);
         log.info("[EssentialData] 已创建管理员用户 (13800000001)。");
         return true;
+    }
+
+    private boolean requiresLegacyDefaultPasswordUpgrade(User admin) {
+        return "admin123".equals(admin.getPasswordHash());
     }
 
     private boolean ensureNodes() {
@@ -155,26 +168,44 @@ class EssentialDataSeeder implements ApplicationRunner {
     }
 
     private boolean ensureEquipmentTypes() {
-        if (equipmentTypeRepo.count() > 0) {
-            return false;
-        }
-        record ET(String key, String name, String icon, boolean ctrl) {
+        record ET(String key, String name, String icon, boolean ctrl, String controlType) {
         }
         var types = java.util.List.of(
-                new ET("water_valve", "水阀", "🚿", true),
-                new ET("water_pump", "水泵", "💦", true),
-                new ET("led_light", "补光灯", "💡", true),
-                new ET("camera", "摄像头", "📷", false));
+                new ET("water_valve", "水阀", "🚿", true, "toggle"),
+                new ET("water_pump", "水泵", "💦", true, "toggle"),
+                new ET("led_light", "补光灯", "💡", true, "slider"),
+                new ET("camera", "摄像头", "📷", false, "toggle"));
+        boolean changed = false;
         for (var e : types) {
-            EquipmentType t = new EquipmentType();
+            EquipmentType t = equipmentTypeRepo.findByEquipmentKey(e.key()).orElseGet(EquipmentType::new);
+            boolean created = t.getId() == null;
+            boolean dirty = created;
+            if (!java.util.Objects.equals(t.getName(), e.name())) {
+                t.setName(e.name());
+                dirty = true;
+            }
+            if (!java.util.Objects.equals(t.getIcon(), e.icon())) {
+                t.setIcon(e.icon());
+                dirty = true;
+            }
+            if (!java.util.Objects.equals(t.getControllable(), e.ctrl())) {
+                t.setControllable(e.ctrl());
+                dirty = true;
+            }
+            if (!java.util.Objects.equals(t.getControlType(), e.controlType())) {
+                t.setControlType(e.controlType());
+                dirty = true;
+            }
             t.setEquipmentKey(e.key());
-            t.setName(e.name());
-            t.setIcon(e.icon());
-            t.setControllable(e.ctrl());
-            equipmentTypeRepo.save(t);
+            if (dirty) {
+                equipmentTypeRepo.save(t);
+                changed = true;
+            }
         }
-        log.info("[EssentialData] 已创建 {} 种设备类型。", types.size());
-        return true;
+        if (changed) {
+            log.info("[EssentialData] 设备类型定义已补全/回填。", types.size());
+        }
+        return changed;
     }
 
     /**

@@ -45,6 +45,8 @@ public class MockMqttSimulator {
     private final ConcurrentHashMap<String, ConcurrentHashMap<String, Double>> nodeEnvironments = new ConcurrentHashMap<>();
     /** Per-node equipment state: nodeId -> (equipKey -> on/off) */
     private final ConcurrentHashMap<String, ConcurrentHashMap<String, Boolean>> nodeEquipments = new ConcurrentHashMap<>();
+    /** Per-node LED brightness: nodeId -> brightness (0-100, 0=off) */
+    private final ConcurrentHashMap<String, Integer> nodeLedBrightness = new ConcurrentHashMap<>();
     /** Per-node mode */
     private final ConcurrentHashMap<String, String> nodeModes = new ConcurrentHashMap<>();
     private final AtomicLong alertSeq = new AtomicLong(System.currentTimeMillis());
@@ -96,6 +98,7 @@ public class MockMqttSimulator {
             eq.put("camera", false);
             nodeEquipments.put(nodeId, eq);
 
+            nodeLedBrightness.put(nodeId, 0);
             nodeModes.put(nodeId, "manual");
         }
     }
@@ -132,10 +135,36 @@ public class MockMqttSimulator {
             fluctuate(env, "soilTemp", 0.2, 5.0, 40.0);
             fluctuate(env, "soilHumidity", 0.5, 10.0, 90.0);
 
+            // Smart mode: auto-calculate LED brightness from light intensity (inverse
+            // mapping)
+            String mode = nodeModes.getOrDefault(nodeId, "manual");
+            if ("smart".equals(mode)) {
+                double light = env.getOrDefault("light", 25000.0);
+                int autoBrightness = Math.max(0, Math.min(100, (int) ((1.0 - light / 30000.0) * 100)));
+                nodeLedBrightness.put(nodeId, autoBrightness);
+                ConcurrentHashMap<String, Boolean> eqRef = nodeEquipments.get(nodeId);
+                if (eqRef != null) {
+                    eqRef.put("led_light", autoBrightness > 0);
+                }
+            }
+
+            Map<String, Object> equipMap = new LinkedHashMap<>();
+            ConcurrentHashMap<String, Boolean> eqSnap = nodeEquipments.get(nodeId);
+            if (eqSnap != null) {
+                for (Map.Entry<String, Boolean> entry : eqSnap.entrySet()) {
+                    if ("led_light".equals(entry.getKey())) {
+                        // LED outputs brightness 0-100 instead of boolean
+                        equipMap.put("led_light", nodeLedBrightness.getOrDefault(nodeId, 0));
+                    } else {
+                        equipMap.put(entry.getKey(), entry.getValue());
+                    }
+                }
+            }
+
             Map<String, Object> data = new LinkedHashMap<>();
             data.put("environment", new LinkedHashMap<>(env));
-            data.put("equipment", new LinkedHashMap<>(eq));
-            data.put("mode", nodeModes.getOrDefault(nodeId, "manual"));
+            data.put("equipment", equipMap);
+            data.put("mode", mode);
 
             Map<String, Object> payload = new LinkedHashMap<>();
             payload.put("msg_type", "telemetry");
@@ -187,11 +216,33 @@ public class MockMqttSimulator {
         } else {
             ConcurrentHashMap<String, Boolean> eq = nodeEquipments.get(nodeId);
             if (eq != null && eq.containsKey(targetDevice)) {
-                eq.put(targetDevice, "turn_on".equals(command));
-                log.info("[MockMqtt] {} {} = {}", nodeId, targetDevice, eq.get(targetDevice));
-                opLogService.log("DEVICE_CONTROL", null, null,
-                        "equipment", targetDevice,
-                        "{\"action\":\"" + command + "\"}");
+                if ("set_brightness".equals(command) && "led_light".equals(targetDevice)) {
+                    @SuppressWarnings("unchecked")
+                    Map<String, Object> params = action.get("parameters") instanceof Map<?, ?>
+                            ? (Map<String, Object>) action.get("parameters")
+                            : Map.of();
+                    int brightness = 100;
+                    Object bVal = params.get("brightness");
+                    if (bVal instanceof Number) {
+                        brightness = Math.max(0, Math.min(100, ((Number) bVal).intValue()));
+                    }
+                    nodeLedBrightness.put(nodeId, brightness);
+                    eq.put(targetDevice, brightness > 0);
+                    log.info("[MockMqtt] {} led_light brightness = {}", nodeId, brightness);
+                    opLogService.log("DEVICE_CONTROL", null, null,
+                            "equipment", targetDevice,
+                            "{\"action\":\"set_brightness\",\"brightness\":" + brightness + "}");
+                } else {
+                    boolean on = "turn_on".equals(command);
+                    eq.put(targetDevice, on);
+                    if ("led_light".equals(targetDevice)) {
+                        nodeLedBrightness.put(nodeId, on ? 100 : 0);
+                    }
+                    log.info("[MockMqtt] {} {} = {}", nodeId, targetDevice, eq.get(targetDevice));
+                    opLogService.log("DEVICE_CONTROL", null, null,
+                            "equipment", targetDevice,
+                            "{\"action\":\"" + command + "\"}");
+                }
             }
         }
     }

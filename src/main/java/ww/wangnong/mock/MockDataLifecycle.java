@@ -83,6 +83,7 @@ public class MockDataLifecycle implements ApplicationRunner {
     @Override
     public void run(ApplicationArguments args) {
         if (nodeRepo.count() > 0) {
+            seedEquipmentTypes();
             log.info("[MockData] 模拟节点已存在，重建种子告警...");
             // 删除旧种子告警并重建，确保每次启动都有多样化告警
             for (int i = 1; i <= 5; i++) {
@@ -336,29 +337,28 @@ public class MockDataLifecycle implements ApplicationRunner {
     }
 
     private void seedEquipmentTypes() {
-        if (equipmentTypeRepo.count() > 0)
-            return;
-        record ET(String key, String name, String icon, boolean ctrl) {
+        record ET(String key, String name, String icon, boolean ctrl, String controlType) {
         }
 
         List<ET> types = List.of(
-                new ET("water_valve", "水阀", "🚿", true),
-                new ET("water_pump", "水泵", "💦", true),
-                new ET("led_light", "补光灯", "💡", true),
-                new ET("camera", "摄像头", "📷", false),
-                new ET("fan", "排风扇", "🌀", true),
-                new ET("heater", "加热器", "🔥", true),
-                new ET("shade", "遮阳帘", "🪟", true),
-                new ET("ventilation", "通风窗", "🪁", true),
-                new ET("fertilizer_pump", "施肥泵", "🧴", true),
-                new ET("mist_sprayer", "喷雾器", "🌫️", true));
+                new ET("water_valve", "水阀", "🚿", true, "toggle"),
+                new ET("water_pump", "水泵", "💦", true, "toggle"),
+                new ET("led_light", "补光灯", "💡", true, "slider"),
+                new ET("camera", "摄像头", "📷", false, "toggle"),
+                new ET("fan", "排风扇", "🌀", true, "toggle"),
+                new ET("heater", "加热器", "🔥", true, "toggle"),
+                new ET("shade", "遮阳帘", "🪟", true, "toggle"),
+                new ET("ventilation", "通风窗", "🪁", true, "toggle"),
+                new ET("fertilizer_pump", "施肥泵", "🧴", true, "toggle"),
+                new ET("mist_sprayer", "喷雾器", "🌫️", true, "toggle"));
 
         for (ET e : types) {
-            EquipmentType t = new EquipmentType();
+            EquipmentType t = equipmentTypeRepo.findByEquipmentKey(e.key()).orElseGet(EquipmentType::new);
             t.setEquipmentKey(e.key());
             t.setName(e.name());
             t.setIcon(e.icon());
             t.setControllable(e.ctrl());
+            t.setControlType(e.controlType());
             equipmentTypeRepo.save(t);
         }
     }

@@ -70,6 +70,8 @@ HMHT/
 
 组件通过 `config/condition/` 包中的 5 个自定义条件注解（`@ConditionalOnMockMode` / `@ConditionalOnBridgeMode` / `@ConditionalOnPythonRoute` / `@ConditionalOnHardwareRoute` / `@ConditionalOnNoPythonRoute`）按模式激活，详见 `.github/instructions/java.instructions.md`。
 
+启动时会确保默认管理员账号 `13800000001` 存在；若检测到历史版本遗留的明文默认密码 `admin123`，会自动升级为 BCrypt 哈希，不覆盖非默认密码。
+
 说明：`full` 模式下若同一 `deviceId` 同时存在 Python telemetry 与真实硬件 telemetry，桥接层会在首次收到真实硬件 telemetry 后优先采用硬件数据，并忽略后续同设备的 Python telemetry 覆盖。
 
 > **V2 阶段能力**：硬件 telemetry/command/ack 全链路打通；设备能力与影子查询；命令 ACK 超时重试闭环（5s 超时、3 次重试）；控制面持久化。协议规范见 [docs/backend-hardware-protocol.md](docs/backend-hardware-protocol.md)。

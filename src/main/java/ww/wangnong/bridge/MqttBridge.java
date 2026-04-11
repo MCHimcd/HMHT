@@ -404,10 +404,19 @@ public class MqttBridge {
                             source = "manual";
                         }
                         if (!targetDevice.isBlank() && !command.isBlank()) {
-                            String detail = "mode".equals(targetDevice)
-                                    ? "{\"action\":\"" + command + "\",\"mode\":\"" + command
-                                            + "\",\"source\":\"" + source + "\"}"
-                                    : "{\"action\":\"" + command + "\",\"source\":\"" + source + "\"}";
+                            String detail;
+                            if ("mode".equals(targetDevice)) {
+                                detail = "{\"action\":\"" + command + "\",\"mode\":\"" + command
+                                        + "\",\"source\":\"" + source + "\"}";
+                            } else if ("led_light".equals(targetDevice) && "set_brightness".equals(command)
+                                    && actionMap.get("parameters") instanceof Map<?, ?> paramsMap) {
+                                Object brightness = paramsMap.get("brightness");
+                                detail = "{\"action\":\"" + command + "\",\"brightness\":"
+                                        + String.valueOf(brightness == null ? 0 : brightness)
+                                        + ",\"source\":\"" + source + "\"}";
+                            } else {
+                                detail = "{\"action\":\"" + command + "\",\"source\":\"" + source + "\"}";
+                            }
                             opLogService.log("DEVICE_CONTROL", null, null, "equipment", targetDevice, detail);
                         }
                     }

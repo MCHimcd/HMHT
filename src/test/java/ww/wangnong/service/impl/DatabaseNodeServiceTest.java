@@ -301,6 +301,7 @@ class DatabaseNodeServiceTest {
         assertThat(result).hasSize(1);
         assertThat(result.getFirst().key()).isEqualTo("water_pump");
         assertThat(result.getFirst().controllable()).isTrue();
+        assertThat(result.getFirst().controlType()).isEqualTo("toggle");
     }
 
     @Test

@@ -30,4 +30,10 @@ public class EquipmentType {
 
     @Column(nullable = false)
     private Boolean controllable = true;
+
+    /**
+     * UI control type: "toggle" (default on/off switch) or "slider" (range 0-100)
+     */
+    @Column(name = "control_type", length = 20)
+    private String controlType = "toggle";
 }

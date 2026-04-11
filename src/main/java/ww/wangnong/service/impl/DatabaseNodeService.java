@@ -152,7 +152,8 @@ public class DatabaseNodeService implements NodeService {
             if (type == null)
                 return null;
             return new EquipmentMetaInfo(type.getEquipmentKey(), type.getName(),
-                    type.getIcon(), type.getControllable());
+                    type.getIcon(), type.getControllable(),
+                    type.getControlType() != null ? type.getControlType() : "toggle");
         }).filter(java.util.Objects::nonNull).toList();
     }
 
@@ -272,7 +273,8 @@ public class DatabaseNodeService implements NodeService {
                 controllable = true;
             }
 
-            return new EquipmentMetaInfo(key, name, icon, controllable);
+            return new EquipmentMetaInfo(key, name, icon, controllable,
+                    type != null && type.getControlType() != null ? type.getControlType() : "toggle");
         }).filter(java.util.Objects::nonNull).toList();
     }
 

@@ -76,7 +76,7 @@ class NodeControllerTest {
         void getEquipmentMeta_returnsList() throws Exception {
                 when(nodeService.getEquipmentMeta("N01"))
                                 .thenReturn(List.of(new NodeService.EquipmentMetaInfo(
-                                                "water_pump", "水泵", null, true)));
+                                                "water_pump", "水泵", null, true, "toggle")));
 
                 mockMvc.perform(get("/v1/nodes/N01/equipment-meta"))
                                 .andExpect(status().isOk())

@@ -13,6 +13,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
+import jakarta.annotation.PostConstruct;
 import ww.wangnong.bridge.InfluxTelemetryWriter;
 import ww.wangnong.bridge.TelemetryAlertChecker;
 import ww.wangnong.config.RunModeHolder;
@@ -30,6 +31,7 @@ public class SimNodeSimulator {
     private static final Random RNG = new Random();
     private static final ObjectMapper MAPPER = new ObjectMapper();
     public static final String NODE_ID = "SIM_Node_01";
+    private static final String COMMAND_TOPIC = "/wangnong_2026/node/" + NODE_ID + "/command";
 
     private final PahoMqttService mqttService;
     private final TelemetryAlertChecker alertChecker;
@@ -40,6 +42,7 @@ public class SimNodeSimulator {
 
     private final ConcurrentHashMap<String, Double> env = new ConcurrentHashMap<>();
     private final ConcurrentHashMap<String, Boolean> equip = new ConcurrentHashMap<>();
+    private int ledBrightness = 0;
     private String mode = "manual";
     private int anomalyCycle = 0;
 
@@ -76,6 +79,22 @@ public class SimNodeSimulator {
         equip.put("camera", true);
     }
 
+    @PostConstruct
+    public void init() {
+        if (!active.get()) {
+            return;
+        }
+        mqttService.subscribe(COMMAND_TOPIC, msg -> {
+            try {
+                @SuppressWarnings("unchecked")
+                Map<String, Object> payload = MAPPER.readValue(msg.payload(), Map.class);
+                handleCommand(payload);
+            } catch (Exception e) {
+                log.warn("[SimNode] Failed to handle command", e);
+            }
+        });
+    }
+
     /** 外部终止模拟（如收到真实硬件数据后调用）。 */
     public void shutdown() {
         if (active.compareAndSet(true, false)) {
@@ -106,9 +125,17 @@ public class SimNodeSimulator {
         fluctuate("soilTemp", 0.2, 5.0, 40.0);
         fluctuate("soilHumidity", 0.5, 10.0, 90.0);
 
+        if ("smart".equals(mode)) {
+            double light = env.getOrDefault("light", 12000.0);
+            ledBrightness = Math.max(0, Math.min(100, (int) ((1.0 - light / 30000.0) * 100)));
+            equip.put("led_light", ledBrightness > 0);
+        }
+
         Map<String, Object> data = new LinkedHashMap<>();
+        Map<String, Object> equipData = new LinkedHashMap<>(equip);
+        equipData.put("led_light", ledBrightness);
         data.put("environment", new LinkedHashMap<>(env));
-        data.put("equipment", new LinkedHashMap<>(equip));
+        data.put("equipment", equipData);
         data.put("mode", mode);
 
         Map<String, Object> payload = new LinkedHashMap<>();
@@ -148,5 +175,49 @@ public class SimNodeSimulator {
         double delta = (RNG.nextDouble() * 2 - 1) * step;
         double next = Math.max(min, Math.min(max, current + delta));
         env.put(key, Math.round(next * 10.0) / 10.0);
+    }
+
+    @SuppressWarnings("unchecked")
+    private void handleCommand(Map<String, Object> payload) {
+        Object actionObj = payload.get("action");
+        if (!(actionObj instanceof Map<?, ?> actionMap)) {
+            return;
+        }
+        Map<String, Object> action = (Map<String, Object>) actionMap;
+        String targetDevice = String.valueOf(action.getOrDefault("target_device", ""));
+        String command = String.valueOf(action.getOrDefault("command", ""));
+
+        if ("mode".equals(targetDevice)) {
+            mode = command;
+            log.info("[SimNode] mode changed to {}", mode);
+            return;
+        }
+
+        if (!equip.containsKey(targetDevice)) {
+            return;
+        }
+
+        if ("led_light".equals(targetDevice)) {
+            if ("set_brightness".equals(command)) {
+                Map<String, Object> params = action.get("parameters") instanceof Map<?, ?>
+                        ? (Map<String, Object>) action.get("parameters")
+                        : Map.of();
+                Object brightnessValue = params.get("brightness");
+                if (brightnessValue instanceof Number number) {
+                    ledBrightness = Math.max(0, Math.min(100, number.intValue()));
+                }
+            } else if ("turn_on".equals(command)) {
+                ledBrightness = 100;
+            } else if ("turn_off".equals(command)) {
+                ledBrightness = 0;
+            }
+            equip.put(targetDevice, ledBrightness > 0);
+            log.info("[SimNode] led_light brightness = {}", ledBrightness);
+            return;
+        }
+
+        boolean on = "turn_on".equals(command);
+        equip.put(targetDevice, on);
+        log.info("[SimNode] {} = {}", targetDevice, on);
     }
 }
