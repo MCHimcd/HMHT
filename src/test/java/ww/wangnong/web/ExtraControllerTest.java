@@ -67,7 +67,8 @@ class ExtraControllerTest {
         void getPlayback_returnsItems() throws Exception {
                 when(extraService.getCameraPlayback("N01", null))
                                 .thenReturn(List.of(new PlaybackItem("pb-001", "2026-01-01",
-                                                "00:30:00", "1080p", true, 0)));
+                                                "00:30:00", "1080p", true, 0,
+                                                "https://example.com/playback/N01/001.mp4")));
 
                 mockMvc.perform(get("/v1/cameras/N01/playback"))
                                 .andExpect(status().isOk())
@@ -79,7 +80,8 @@ class ExtraControllerTest {
         void getKeyframes_returnsItems() throws Exception {
                 when(extraService.getCameraKeyframes("N01", null))
                                 .thenReturn(List.of(new KeyframeItem("kf-001", "2026-01-01T09:30:00",
-                                                "叶片发黄", 0.87, "thumb://N01/1", true, "叶片异常", "warning")));
+                                                "叶片发黄", 0.87, "thumb://N01/1", true, "叶片异常", "warning",
+                                                "https://example.com/keyframes/N01/kf-001.jpg")));
 
                 mockMvc.perform(get("/v1/cameras/N01/keyframes"))
                                 .andExpect(status().isOk())

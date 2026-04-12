@@ -73,6 +73,7 @@ public class SimNodeSimulator {
         env.put("soilTemp", 20.0 + RNG.nextDouble());
         env.put("soilHumidity", 42.0 + RNG.nextDouble() * 3);
 
+        equip.put("fan", false);
         equip.put("water_valve", false);
         equip.put("water_pump", false);
         equip.put("led_light", false);

@@ -95,6 +95,7 @@ public class MockMqttSimulator {
             eq.put("water_valve", false);
             eq.put("water_pump", false);
             eq.put("led_light", false);
+            eq.put("fan", false);
             eq.put("camera", false);
             nodeEquipments.put(nodeId, eq);
 

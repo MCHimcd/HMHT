@@ -35,8 +35,10 @@ public class MockExtraService implements ExtraService {
     public List<PlaybackItem> getCameraPlayback(String nodeId, String date) {
         String d = (date == null || date.isBlank()) ? LocalDate.now().toString() : date;
         return List.of(
-                new PlaybackItem("pb-001", d, "00:30:00", "1080p", true, 1),
-                new PlaybackItem("pb-002", d, "00:20:00", "720p", true, 0));
+                new PlaybackItem("pb-001", d, "00:30:00", "1080p", true, 1,
+                        "https://example.com/playback/" + nodeId + "/" + d + "/001.mp4"),
+                new PlaybackItem("pb-002", d, "00:20:00", "720p", true, 0,
+                        "https://example.com/playback/" + nodeId + "/" + d + "/002.mp4"));
     }
 
     @Override
@@ -44,8 +46,10 @@ public class MockExtraService implements ExtraService {
         String d = (date == null || date.isBlank()) ? LocalDate.now().toString() : date;
         return List.of(
                 new KeyframeItem("kf-001", d + "T09:30:00", "叶片发黄", 0.87,
-                        "thumb://" + nodeId + "/1", true, "叶片异常", "warning"),
+                        "thumb://" + nodeId + "/1", true, "叶片异常", "warning",
+                        "https://example.com/keyframes/" + nodeId + "/" + d + "/kf-001.jpg"),
                 new KeyframeItem("kf-002", d + "T14:20:00", "虫害疑似", 0.78,
-                        "thumb://" + nodeId + "/2", true, "虫害预警", "critical"));
+                        "thumb://" + nodeId + "/2", true, "虫害预警", "critical",
+                        "https://example.com/keyframes/" + nodeId + "/" + d + "/kf-002.jpg"));
     }
 }

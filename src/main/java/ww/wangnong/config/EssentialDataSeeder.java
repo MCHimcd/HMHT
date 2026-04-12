@@ -73,10 +73,9 @@ class EssentialDataSeeder implements ApplicationRunner {
         changed |= ensureNodes();
         changed |= ensureSensorTypes();
         changed |= ensureEquipmentTypes();
-        if (runModeHolder.getMode() != RunMode.HARDWARE) {
-            changed |= ensureSimNodeSensors();
-            changed |= ensureSimNodeEquipment();
-        }
+        changed |= ensureSimNodeSensors();
+        changed |= ensureSimNodeEquipment();
+        changed |= ensureA03NodeEquipment();
         if (changed) {
             log.info("[EssentialData] 基础种子数据已补全。");
         }
@@ -115,13 +114,8 @@ class EssentialDataSeeder implements ApplicationRunner {
         }
         var defaultNodes = java.util.List.of(
                 new ND("A03_Node_01", "温室节点 1"),
-                new ND("A03_Node_02", "温室节点 2"));
-        if (runModeHolder.getMode() != RunMode.HARDWARE) {
-            defaultNodes = java.util.List.of(
-                    new ND("A03_Node_01", "温室节点 1"),
-                    new ND("A03_Node_02", "温室节点 2"),
-                    new ND("SIM_Node_01", "全模拟演示节点"));
-        }
+                new ND("A03_Node_02", "温室节点 2"),
+                new ND("SIM_Node_01", "全模拟演示节点"));
         boolean created = false;
         for (var nd : defaultNodes) {
             if (nodeRepo.findByNodeId(nd.nodeId()).isEmpty()) {
@@ -174,6 +168,7 @@ class EssentialDataSeeder implements ApplicationRunner {
                 new ET("water_valve", "水阀", "🚿", true, "toggle"),
                 new ET("water_pump", "水泵", "💦", true, "toggle"),
                 new ET("led_light", "补光灯", "💡", true, "slider"),
+                new ET("fan", "排风扇", "🌀", true, "toggle"),
                 new ET("camera", "摄像头", "📷", false, "toggle"));
         boolean changed = false;
         for (var e : types) {
@@ -237,19 +232,42 @@ class EssentialDataSeeder implements ApplicationRunner {
         return true;
     }
 
+    private boolean ensureA03NodeEquipment() {
+        var keys = java.util.List.of("water_valve", "water_pump", "led_light", "fan", "camera");
+        boolean changed = false;
+        changed |= ensureNodeEquipmentKeys("A03_Node_01", keys);
+        changed |= ensureNodeEquipmentKeys("A03_Node_02", keys);
+        return changed;
+    }
+
     private boolean ensureSimNodeEquipment() {
         String nodeId = "SIM_Node_01";
-        if (!nodeEquipmentRepo.findByNodeId(nodeId).isEmpty()) {
-            return false;
+        var keys = java.util.List.of("water_valve", "water_pump", "led_light", "fan", "camera");
+        return ensureNodeEquipmentKeys(nodeId, keys);
+    }
+
+    /**
+     * 确保指定节点拥有给定设备 key 的 NodeEquipment 记录，缺失则补建。
+     */
+    private boolean ensureNodeEquipmentKeys(String nodeId, java.util.List<String> keys) {
+        var existing = nodeEquipmentRepo.findByNodeId(nodeId);
+        var existingKeys = new java.util.HashSet<String>();
+        for (var ne : existing) {
+            existingKeys.add(ne.getEquipmentKey());
         }
-        var keys = java.util.List.of("water_valve", "water_pump", "led_light", "camera");
+        int added = 0;
         for (var key : keys) {
-            NodeEquipment ne = new NodeEquipment();
-            ne.setNodeId(nodeId);
-            ne.setEquipmentKey(key);
-            nodeEquipmentRepo.save(ne);
+            if (!existingKeys.contains(key)) {
+                NodeEquipment ne = new NodeEquipment();
+                ne.setNodeId(nodeId);
+                ne.setEquipmentKey(key);
+                nodeEquipmentRepo.save(ne);
+                added++;
+            }
         }
-        log.info("[EssentialData] 已创建 SIM_Node_01 的 {} 个设备关联。", keys.size());
-        return true;
+        if (added > 0) {
+            log.info("[EssentialData] 已为 {} 补建 {} 个设备关联。", nodeId, added);
+        }
+        return added > 0;
     }
 }

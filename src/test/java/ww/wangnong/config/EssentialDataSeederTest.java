@@ -66,9 +66,9 @@ class EssentialDataSeederTest {
 
         verify(userRepo).save(any(User.class));
         verify(sensorTypeRepo, times(6)).save(any(SensorType.class));
-        verify(equipmentTypeRepo, times(4)).save(any(EquipmentType.class));
+        verify(equipmentTypeRepo, times(5)).save(any(EquipmentType.class));
         verify(nodeSensorRepo, times(6)).save(any(NodeSensor.class));
-        verify(nodeEquipmentRepo, times(4)).save(any(NodeEquipment.class));
+        verify(nodeEquipmentRepo, times(15)).save(any(NodeEquipment.class));
     }
 
     @Test
@@ -89,16 +89,25 @@ class EssentialDataSeederTest {
             return Optional.of(existingEquipmentType(key));
         });
         when(nodeSensorRepo.findByNodeId("SIM_Node_01")).thenReturn(List.of(new NodeSensor()));
-        when(nodeEquipmentRepo.findByNodeId("SIM_Node_01")).thenReturn(List.of(new NodeEquipment()));
+        when(nodeEquipmentRepo.findByNodeId(anyString())).thenAnswer(invocation -> {
+            List<NodeEquipment> result = new java.util.ArrayList<>();
+            for (String k : List.of("water_valve", "water_pump", "led_light", "fan", "camera")) {
+                NodeEquipment ne = new NodeEquipment();
+                ne.setEquipmentKey(k);
+                result.add(ne);
+            }
+            return result;
+        });
 
         seeder.run(new DefaultApplicationArguments());
 
         verify(userRepo, never()).save(any(User.class));
         verify(sensorTypeRepo, never()).save(any(SensorType.class));
+        verify(nodeEquipmentRepo, never()).save(any(NodeEquipment.class));
     }
 
     @Test
-    void run_hardwareMode_skipsSimNodeSensorsAndEquipment() throws Exception {
+    void run_hardwareMode_stillCreatesSimNodeSensorsAndEquipment() throws Exception {
         RunModeHolder holder = new RunModeHolder("hardware");
         EssentialDataSeeder seeder = new EssentialDataSeeder(
                 userRepo, nodeRepo, sensorTypeRepo, equipmentTypeRepo,
@@ -117,8 +126,8 @@ class EssentialDataSeederTest {
 
         seeder.run(new DefaultApplicationArguments());
 
-        verify(nodeSensorRepo, never()).save(any(NodeSensor.class));
-        verify(nodeEquipmentRepo, never()).save(any(NodeEquipment.class));
+        verify(nodeSensorRepo, times(6)).save(any(NodeSensor.class));
+        verify(nodeEquipmentRepo, times(15)).save(any(NodeEquipment.class));
     }
 
     @Test
@@ -179,6 +188,12 @@ class EssentialDataSeederTest {
                 type.setName("摄像头");
                 type.setIcon("📷");
                 type.setControllable(false);
+                type.setControlType("toggle");
+                break;
+            case "fan":
+                type.setName("排风扇");
+                type.setIcon("🌀");
+                type.setControllable(true);
                 type.setControlType("toggle");
                 break;
             default:

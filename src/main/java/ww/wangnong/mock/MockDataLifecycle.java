@@ -32,6 +32,7 @@ import ww.wangnong.repository.SensorTypeRepository;
 import ww.wangnong.repository.UserNodeAccessRepository;
 import ww.wangnong.repository.UserRepository;
 import ww.wangnong.service.AlertService;
+import ww.wangnong.service.OperationLogService;
 
 import org.springframework.security.crypto.password.PasswordEncoder;
 
@@ -54,6 +55,7 @@ public class MockDataLifecycle implements ApplicationRunner {
     @jakarta.annotation.Nullable
     private final InfluxTelemetryService influxService;
     private final PasswordEncoder passwordEncoder;
+    private final OperationLogService opLogService;
 
     public MockDataLifecycle(UserRepository userRepo, NodeRepository nodeRepo,
             SensorTypeRepository sensorTypeRepo,
@@ -65,7 +67,8 @@ public class MockDataLifecycle implements ApplicationRunner {
             AlertRepository alertRepo,
             JdbcTemplate jdbc,
             @Nullable InfluxTelemetryService influxService,
-            PasswordEncoder passwordEncoder) {
+            PasswordEncoder passwordEncoder,
+            OperationLogService opLogService) {
         this.userRepo = userRepo;
         this.nodeRepo = nodeRepo;
         this.sensorTypeRepo = sensorTypeRepo;
@@ -78,6 +81,7 @@ public class MockDataLifecycle implements ApplicationRunner {
         this.jdbc = jdbc;
         this.influxService = influxService;
         this.passwordEncoder = passwordEncoder;
+        this.opLogService = opLogService;
     }
 
     @Override
@@ -90,7 +94,9 @@ public class MockDataLifecycle implements ApplicationRunner {
                 alertRepo.findByAlertId("SEED_" + i).ifPresent(alertRepo::delete);
             }
             seedAlerts();
-            log.info("[MockData] 种子告警已重建。");
+            // 补种操作记录（cleanup 会清空 operation_logs）
+            userRepo.findByPhone("13800000000").ifPresent(u -> seedOperationLogs(u.getId(), u.getUserName()));
+            log.info("[MockData] 种子告警与操作记录已重建。");
             return;
         }
         seed();
@@ -178,6 +184,9 @@ public class MockDataLifecycle implements ApplicationRunner {
 
         // 9. 初始告警数据
         seedAlerts();
+
+        // 10. 设备操作记录
+        seedOperationLogs(user.getId(), user.getUserName());
     }
 
     private void seedInfluxData() {
@@ -214,6 +223,7 @@ public class MockDataLifecycle implements ApplicationRunner {
                         "water_valve", rng.nextDouble() < 0.1,
                         "water_pump", rng.nextDouble() < 0.15,
                         "led_light", light < 5000,
+                        "fan", temp > 30,
                         "camera", true);
                 influxService.writeEquipmentState(nodeId, ts, eq, "manual");
             }
@@ -386,7 +396,7 @@ public class MockDataLifecycle implements ApplicationRunner {
     }
 
     private void seedNodeEquipment(String nodeId) {
-        for (String key : List.of("water_valve", "water_pump", "led_light", "camera")) {
+        for (String key : List.of("water_valve", "water_pump", "led_light", "fan", "camera")) {
             NodeEquipment ne = new NodeEquipment();
             ne.setNodeId(nodeId);
             ne.setEquipmentKey(key);
@@ -462,5 +472,25 @@ public class MockDataLifecycle implements ApplicationRunner {
                     a.handled(), a.handled() ? ts + 60_000L : null, ts));
         }
         log.info("[MockData] 已生成 {} 条初始告警。", alerts.size());
+    }
+
+    private void seedOperationLogs(Long userId, String userName) {
+        String[] keys = { "water_valve", "water_pump", "led_light", "fan", "camera" };
+        String[][] actions = {
+                { "turn_on", "开启" }, { "turn_off", "关闭" }
+        };
+        Random rng = new Random(99);
+        long now = System.currentTimeMillis();
+        int count = 0;
+        for (String key : keys) {
+            // 每种设备生成 4 条历史操作记录（交替开/关）
+            for (int i = 0; i < 4; i++) {
+                String[] act = actions[i % 2];
+                String detail = String.format("{\"action\":\"%s\",\"mode\":\"manual\"}", act[0]);
+                opLogService.log("DEVICE_CONTROL", userId, userName, "equipment", key, detail);
+                count++;
+            }
+        }
+        log.info("[MockData] 已生成 {} 条设备操作记录。", count);
     }
 }

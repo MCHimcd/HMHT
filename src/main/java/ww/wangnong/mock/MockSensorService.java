@@ -78,8 +78,7 @@ public class MockSensorService implements SensorService {
         Map<String, String> units = Map.of(
                 "water_valve", "开阀次数",
                 "water_pump", "灌溉量(升)",
-                "led_light", "补光时长(H)",
-                "camera", "识别次数");
+                "led_light", "补光时长(H)", "fan", "运行时长(H)", "camera", "识别次数");
         String unit = units.getOrDefault(equipmentKey, "值");
 
         List<StatsPoint> points = new ArrayList<>();
