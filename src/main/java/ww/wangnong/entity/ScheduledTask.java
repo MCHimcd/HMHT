@@ -15,6 +15,14 @@ import org.hibernate.annotations.UpdateTimestamp;
 import lombok.Getter;
 import lombok.Setter;
 
+/**
+ * Purpose: 保存用户定义的设备定时任务。
+ * Responsibilities: 记录目标节点、设备动作、执行时刻、重复规则和启用状态，供任务管理与执行器读取。
+ * Flow: ScheduledTaskService 创建/更新 -> 仓库持久化 -> 定时执行器按规则消费。
+ * Dependencies: scheduled_tasks 表、ScheduledTaskService。
+ * Input: 任务配置字段。
+ * Output: 可执行的定时任务定义。
+ */
 @Entity
 @Table(name = "scheduled_tasks")
 @Getter

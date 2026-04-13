@@ -7,7 +7,12 @@ import org.springframework.core.type.AnnotatedTypeMetadata;
 import ww.wangnong.config.RunMode;
 
 /**
- * 硬件路由条件：当 hmht.run.mode 为 hardware 或 full 时匹配。
+ * Purpose: 实现硬件路由 Bean 条件判定。
+ * Responsibilities: 判断当前模式是否允许与真实硬件链路交互。
+ * Flow: Spring 调用 matches -> 解析运行模式 -> 返回是否启用硬件路由。
+ * Dependencies: RunMode。
+ * Input: hmht.run.mode 配置。
+ * Output: true 表示 hardware/full 模式下应装配 Bean。
  */
 public class OnHardwareRouteCondition implements Condition {
 

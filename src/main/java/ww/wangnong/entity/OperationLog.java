@@ -14,6 +14,14 @@ import org.hibernate.annotations.CreationTimestamp;
 import lombok.Getter;
 import lombok.Setter;
 
+/**
+ * Purpose: 保存后台业务操作审计日志。
+ * Responsibilities: 记录操作人、操作类型、目标对象、明细和时间，支撑后台审计查询。
+ * Flow: 各业务服务调用 OperationLogService.log -> 持久化到 operation_logs -> 管理端分页查询。
+ * Dependencies: operation_logs 表、OperationLogService。
+ * Input: 业务操作元数据。
+ * Output: 审计日志记录。
+ */
 @Entity
 @Table(name = "operation_logs")
 @Getter

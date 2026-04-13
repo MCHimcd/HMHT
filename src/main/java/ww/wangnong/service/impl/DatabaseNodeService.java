@@ -35,6 +35,18 @@ import ww.wangnong.service.AuthService;
 import ww.wangnong.service.NodeService;
 import ww.wangnong.service.OperationLogService;
 
+/**
+ * Purpose: NodeService 的数据库实现。
+ * Responsibilities: 聚合节点可见性、节点详情、传感器/设备元数据与阈值配置，并兼容 capability 与传统绑定两套来源。
+ * Flow: requireUser -> 按角色和授权过滤节点 -> 优先读取 capability 快照 -> 不足时回退 node_* 绑定表 ->
+ * 返回节点视图。
+ * Dependencies:
+ * AuthService、NodeRepository、UserNodeAccessRepository、NodeSensor/EquipmentRepository、Capability/DeviceProfile
+ * 仓库。
+ * Input: token、nodeId、阈值更新列表。
+ * Output: 节点摘要、节点详情、元数据列表或阈值更新副作用。
+ * Boundary: capability 元数据优先于静态绑定；节点在线状态同时受 online 标志与心跳超时双重约束。
+ */
 @Service
 public class DatabaseNodeService implements NodeService {
 
@@ -90,7 +102,7 @@ public class DatabaseNodeService implements NodeService {
         if ("admin".equals(user.getRole())) {
             nodes = nodeRepo.findAll();
         } else {
-            // 拥有的节点 + 被授权的节点
+            // Reason: 普通用户的可见节点来自“自有节点 + 授权节点”并集，二者可能重复，必须显式去重。
             List<Node> owned = nodeRepo.findByUserId(user.getId());
             List<String> accessNodeIds = userNodeAccessRepo.findByUserId(user.getId())
                     .stream().map(UserNodeAccess::getNodeId).toList();
@@ -205,6 +217,7 @@ public class DatabaseNodeService implements NodeService {
                 continue;
             }
 
+            // Reason: capability 主题可能沿用 Python/HW 原始 key，返回前必须折叠到 App 侧稳定 key 空间。
             SensorType type = sensorTypeRepo.findBySensorKey(canonicalKey).orElse(null);
             NodeSensor threshold = thresholdByKey.containsKey(canonicalKey)
                     ? thresholdByKey.get(canonicalKey)
@@ -294,6 +307,7 @@ public class DatabaseNodeService implements NodeService {
             return "offline";
         }
 
+        // Invariant: 节点在线不仅依赖 profile.online，还要求 lastSeen 落在心跳窗口内，避免僵尸设备长期显示在线。
         LocalDateTime threshold = LocalDateTime.now().minusSeconds(HEARTBEAT_TIMEOUT_SECONDS);
         return lastSeen.isBefore(threshold) ? "offline" : "online";
     }

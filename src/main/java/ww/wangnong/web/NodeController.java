@@ -13,6 +13,16 @@ import org.springframework.web.bind.annotation.RestController;
 import ww.wangnong.dto.ApiResponse;
 import ww.wangnong.service.NodeService;
 
+/**
+ * Purpose: 暴露节点列表、详情、元数据和阈值管理接口。
+ * Responsibilities: 从 Authorization 头提取业务 token，转发节点查询与阈值更新请求。
+ * Flow: HTTP 请求 -> 提取 token/path/body -> NodeService 权限校验与聚合查询 ->
+ * ApiResponse.ok。
+ * Dependencies: NodeService、ApiResponse。
+ * Input: Bearer token、节点标识、阈值更新列表。
+ * Output: 节点详情、节点元数据或空成功响应。
+ * Side Effects: 阈值更新会修改节点传感器配置。
+ */
 @RestController
 @RequestMapping("/v1/nodes")
 public class NodeController {

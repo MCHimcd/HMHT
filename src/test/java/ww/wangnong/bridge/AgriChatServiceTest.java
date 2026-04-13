@@ -39,7 +39,7 @@ class AgriChatServiceTest {
         mockServer.expect(requestTo("http://test-agri/api/multi-conversation/chat"))
                 .andRespond(withSuccess("{\"reply\":\"Hello from AI\"}", MediaType.APPLICATION_JSON));
 
-        ChatResult result = service.chat("Hi", null);
+        ChatResult result = service.chat("Hi", null, null);
 
         assertThat(result.reply()).isEqualTo("Hello from AI");
         mockServer.verify();
@@ -52,7 +52,7 @@ class AgriChatServiceTest {
         mockServer.expect(requestTo("http://test-agri/api/multi-conversation/chat"))
                 .andRespond(withSuccess("{}", MediaType.APPLICATION_JSON));
 
-        ChatResult result = service.chat("Hi", null);
+        ChatResult result = service.chat("Hi", null, null);
 
         assertThat(result.reply()).isEqualTo("AI 暂无回复");
     }
@@ -68,8 +68,8 @@ class AgriChatServiceTest {
         mockServer.expect(requestTo("http://test-agri/api/multi-conversation/chat"))
                 .andRespond(withSuccess("{\"reply\":\"R2\"}", MediaType.APPLICATION_JSON));
 
-        service.chat("Q1", null);
-        ChatResult result = service.chat("Q2", null);
+        service.chat("Q1", null, null);
+        ChatResult result = service.chat("Q2", null, null);
 
         assertThat(result.reply()).isEqualTo("R2");
         mockServer.verify();
@@ -82,7 +82,7 @@ class AgriChatServiceTest {
         mockServer.expect(requestTo("http://test-agri/api/multi-conversation/chat"))
                 .andRespond(withServerError());
 
-        ChatResult result = service.chat("Hi", null);
+        ChatResult result = service.chat("Hi", null, null);
 
         assertThat(result.reply()).contains("AI 服务暂时不可用");
     }
@@ -92,7 +92,7 @@ class AgriChatServiceTest {
         mockServer.expect(requestTo("http://test-agri/api/multi-conversation/session/new"))
                 .andRespond(withServerError());
 
-        ChatResult result = service.chat("Hi", null);
+        ChatResult result = service.chat("Hi", null, null);
 
         assertThat(result.reply()).contains("AI 服务暂时不可用");
     }

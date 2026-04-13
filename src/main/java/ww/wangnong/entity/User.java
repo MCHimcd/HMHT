@@ -16,6 +16,15 @@ import org.hibernate.annotations.UpdateTimestamp;
 import lombok.Getter;
 import lombok.Setter;
 
+/**
+ * Purpose: 保存系统用户主档案。
+ * Responsibilities: 记录手机号、密码哈希、昵称、性别、生日、头像和角色信息，支撑认证与授权。
+ * Flow: 注册/种子流程创建用户 -> AuthService 校验并更新资料 -> 其他服务按 role/id 做权限判断。
+ * Dependencies: users 表、AuthService。
+ * Input: 用户注册与资料更新字段。
+ * Output: 用户主记录。
+ * Boundary: passwordHash 存储的是编码后密码，业务层不应写入明文。
+ */
 @Entity
 @Table(name = "users")
 @Getter

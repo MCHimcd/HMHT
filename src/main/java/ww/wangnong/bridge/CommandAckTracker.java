@@ -20,8 +20,15 @@ import ww.wangnong.repository.CommandRetryLogRepository;
 import ww.wangnong.repository.DeviceProfileRepository;
 
 /**
- * 命令 ACK 超时重试追踪器。
- * 在硬件路由启用时激活（hardware/full 模式）。
+ * Purpose: 扫描超时命令并驱动 ACK 重试闭环。
+ * Responsibilities: 查找 sent/retry 状态命令、判断是否超时、检测设备离线、执行重试并记录 retry log。
+ * Flow: 定时扫描 pending 命令 -> isTimedOut -> processTimedOutRequest -> publish
+ * 重试或终结 timeout。
+ * Dependencies:
+ * CommandRequestRepository、CommandRetryLogRepository、DeviceProfileRepository、PahoMqttService。
+ * Input: command_request 表中的待处理命令与当前时间。
+ * Output: 命令状态更新、retry log、新的 MQTT 重试消息。
+ * Boundary: 只有在重发成功 publish 后才更新 sentAt/retry_count，避免数据库状态领先于真实下发。
  */
 @Component
 @ConditionalOnHardwareRoute

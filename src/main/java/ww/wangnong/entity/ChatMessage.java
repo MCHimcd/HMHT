@@ -17,6 +17,14 @@ import org.hibernate.annotations.CreationTimestamp;
 import lombok.Getter;
 import lombok.Setter;
 
+/**
+ * Purpose: 保存用户与农业问答服务的对话消息。
+ * Responsibilities: 记录消息归属用户、角色、文本内容和可选图片引用，支撑对话历史能力。
+ * Flow: ChatService 或相关会话逻辑写入 -> 后续按用户维度查询展示。
+ * Dependencies: chat_messages 表、User 实体。
+ * Input: 用户或助手消息内容。
+ * Output: 可回放的聊天消息历史。
+ */
 @Entity
 @Table(name = "chat_messages")
 @Getter

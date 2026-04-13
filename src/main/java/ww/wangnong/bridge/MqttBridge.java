@@ -32,13 +32,15 @@ import ww.wangnong.service.AlertService.AlertInfo;
 import ww.wangnong.service.OperationLogService;
 
 /**
- * MQTT topic bridge between Python (agri) and App (wangnong).
- *
- * Subscribes to Python-side topics (/agri/...) and republishes translated
- * messages on App-side topics (/wangnong_2026/...), and vice versa for
- * commands.
- *
- * 在桥接模式下激活（bridge/hardware/full）。
+ * Purpose: 作为 App、Python agri 后端和硬件设备之间的 MQTT 桥接枢纽。
+ * Responsibilities: 订阅多来源主题、翻译 telemetry/alert、转发 command/ack、写入 InfluxDB
+ * 与控制面持久化，并协调硬件优先策略。
+ * Flow: init 按运行模式注册订阅 -> 入站消息解析并转换 -> 先转发到 App 或下游 -> 异步执行告警检查、持久化与审计。
+ * Dependencies:
+ * PahoMqttService、MqttSubscriptionRegistry、ProtocolPersistenceService、TelemetryTranslator、AlertService、InfluxTelemetryWriter。
+ * Input: /agri、/hmht、/wangnong_2026 主题消息。
+ * Output: 转发后的 MQTT 消息、控制面记录、告警与操作日志、副作用任务。
+ * Boundary: 当真实硬件 telemetry 已到达后，同 deviceId 的 Python telemetry 不再允许覆盖硬件状态。
  */
 @Component
 @ConditionalOnBridgeMode
@@ -129,6 +131,7 @@ public class MqttBridge {
                     String deviceId = firstNonBlank(
                             str(pyPayload.get("device_id")),
                             extractDeviceId(msg.topic(), PY_TOPIC_PREFIX));
+                    // Invariant: 同设备一旦收到真实硬件 telemetry，后续 Python telemetry 只能作为审计输入，不能再覆盖前端状态。
                     if (enableHardwareRoute && shouldPreferHardwareTelemetry(deviceId)) {
                         log.info(
                                 "[Bridge] Python telemetry ignored because real hardware is preferred: deviceId={}, topic={}",
@@ -365,6 +368,7 @@ public class MqttBridge {
                     mqtt.publishAsync(pyTopic, msg.payload(), 1, false);
                 }
                 if (enableHardwareRoute) {
+                    // Reason: 对硬件链路必须先构建规范化 command envelope，再持久化 command_request，保证重试闭环拿到的是实际下发内容。
                     hwEnvelope = toHardwareCommandEnvelope(deviceId, msg.payload());
                     mqtt.publishAsync(hwTopic, hwEnvelope.rawJson(), 1, false);
 

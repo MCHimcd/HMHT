@@ -4,10 +4,14 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 
 /**
- * Translates telemetry payloads between Python (agri) format and App (wangnong)
- * format.
- * Python → App direction: field renaming + structure normalization.
- * App → Python direction: reverse mapping for commands.
+ * Purpose: 统一 Python/HW 遥测到 App 遥测格式的字段翻译规则。
+ * Responsibilities: 规范化环境 key、设备状态、模式字段、硬件图像字段和日志脱敏输出。
+ * Flow: MqttBridge 调用 pyToApp/hardwareV2ToApp -> 提取 environment/equipment ->
+ * Influx 与前端复用统一数据结构。
+ * Dependencies: MqttBridge、InfluxTelemetryWriter。
+ * Input: Python telemetry payload、硬件 V2 telemetry payload、原始 JSON 字符串。
+ * Output: App 格式 telemetry map、环境/设备子结构、压缩后的日志 payload。
+ * Boundary: ENV_PY_TO_APP 是 Python 与硬件共用的 canonical key 字典，变更会同时影响桥接、元数据与时序写入。
  */
 public final class TelemetryTranslator {
 

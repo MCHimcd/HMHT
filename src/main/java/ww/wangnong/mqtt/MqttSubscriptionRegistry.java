@@ -9,12 +9,22 @@ import java.util.function.Consumer;
 
 import org.springframework.stereotype.Component;
 
+/**
+ * Purpose: 统一收集桥接层声明的 MQTT 订阅定义。
+ * Responsibilities: 暂存 topicFilter/qos/handler 三元组，并在 MQTT 客户端可用后集中绑定。
+ * Flow: 组件调用 register 声明订阅 -> snapshot/bindAll 遍历定义 -> PahoMqttService 执行实际
+ * subscribe。
+ * Dependencies: PahoMqttService。
+ * Input: topicFilter、QoS、消息处理函数。
+ * Output: 可重放的订阅定义集合。
+ */
 @Component
 public class MqttSubscriptionRegistry {
 
     private final Map<String, SubscriptionDefinition> definitions = new LinkedHashMap<>();
 
-    public synchronized void register(String topicFilter, Integer qos, Consumer<PahoMqttService.InboundMessage> handler) {
+    public synchronized void register(String topicFilter, Integer qos,
+            Consumer<PahoMqttService.InboundMessage> handler) {
         if (topicFilter == null || topicFilter.isBlank()) {
             throw new IllegalArgumentException("topicFilter cannot be blank");
         }

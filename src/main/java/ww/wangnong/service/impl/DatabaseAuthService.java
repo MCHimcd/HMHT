@@ -30,6 +30,18 @@ import ww.wangnong.repository.VerificationCodeRepository;
 import ww.wangnong.service.AuthService;
 import ww.wangnong.service.OperationLogService;
 
+/**
+ * Purpose: AuthService 的数据库实现。
+ * Responsibilities: 处理登录、验证码、注册、资料修改、头像上传和基于内存 token 的身份校验。
+ * Flow: 控制器入参 -> 仓库查询/密码校验 -> 维护 tokenStore 或用户资料 -> 写入操作日志 -> 返回 AuthService
+ * record。
+ * Dependencies:
+ * UserRepository、VerificationCodeRepository、PasswordEncoder、OperationLogService。
+ * Input: 用户名密码、验证码、token、资料字段、头像文件。
+ * Output: 登录结果、资料快照或用户实体。
+ * Side Effects: 写 verification_codes/users、写头像文件、维护内存 tokenStore、输出审计日志。
+ * Boundary: tokenStore 只存在于当前服务实例内，重启后全部登录态失效。
+ */
 @Service
 public class DatabaseAuthService implements AuthService {
 
@@ -177,6 +189,7 @@ public class DatabaseAuthService implements AuthService {
         Path targetPath = avatarRoot.resolve(filename);
 
         try {
+            // Invariant: 先落新文件再删旧文件，避免写入失败时把用户现有头像一并丢失。
             Files.createDirectories(avatarRoot);
             file.transferTo(targetPath.toFile());
             log.info("[Auth] 头像已保存: {}", targetPath.toAbsolutePath());
@@ -230,6 +243,7 @@ public class DatabaseAuthService implements AuthService {
                 .findFirstByPhoneAndUsedFalseAndExpiresAtAfterOrderByCreatedAtDesc(
                         phone, LocalDateTime.now())
                 .orElseThrow(() -> new BizException(400, "验证码错误或已过期"));
+        // Boundary: 同手机号只校验最近一条未使用且未过期验证码，旧码即使正确也不再接受。
         if (!vc.getCode().equals(code)) {
             throw new BizException(400, "验证码错误");
         }

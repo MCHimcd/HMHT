@@ -21,8 +21,14 @@ import ww.wangnong.mqtt.PahoMqttService;
 import ww.wangnong.repository.NodeRepository;
 
 /**
- * SIM_Node_01 模拟器：在所有运行模式下为全模拟演示节点生成遥测数据。
- * 若节点从数据库删除则自动停止；可通过 {@link #shutdown()} 外部终止。
+ * Purpose: 为 SIM_Node_01 生成完整的单节点模拟遥测与告警。
+ * Responsibilities: 维护模拟环境/设备状态、响应 command、发布 telemetry、写入 Influx，并按阈值制造异常演示。
+ * Flow: 启动时订阅节点 command -> 周期性波动环境并发布 telemetry -> 定时注入异常并触发告警检查。
+ * Dependencies:
+ * PahoMqttService、TelemetryAlertChecker、InfluxTelemetryWriter、NodeRepository、RunModeHolder。
+ * Input: 节点 command、数据库中的节点存在性、随机数。
+ * Output: SIM_Node_01 的 telemetry、告警与 Influx 时序数据。
+ * Boundary: hardware 模式下强制禁用；节点若已从数据库删除会自动停机，避免幽灵节点继续发数据。
  */
 @Component
 public class SimNodeSimulator {
@@ -47,7 +53,7 @@ public class SimNodeSimulator {
     private int anomalyCycle = 0;
 
     private static final String[] SPIKE_KEYS = { "temperature", "humidity", "co2" };
-    private static final double[] SPIKE_VALUES = { 37.5, 88.0, 1650.0 };
+    private static final double[] SPIKE_VALUES = { 33.0, 78.0, 480.0 };
 
     public SimNodeSimulator(PahoMqttService mqttService,
             TelemetryAlertChecker alertChecker,
@@ -68,16 +74,29 @@ public class SimNodeSimulator {
 
         env.put("temperature", 24.0 + RNG.nextDouble() * 2);
         env.put("humidity", 58.0 + RNG.nextDouble() * 5);
-        env.put("light", 12000.0);
-        env.put("co2", 430.0 + RNG.nextDouble() * 20);
-        env.put("soilTemp", 20.0 + RNG.nextDouble());
-        env.put("soilHumidity", 42.0 + RNG.nextDouble() * 3);
+        env.put("light", 900.0);
+        env.put("co2", 420.0 + RNG.nextDouble() * 10);
+        env.put("soilTemp", 19.0 + RNG.nextDouble() * 2);
+        env.put("soilHumidity", 68.0 + RNG.nextDouble() * 4);
+        env.put("soilPh", 6.6 + RNG.nextDouble() * 0.4);
+        env.put("soilN", 150.0 + RNG.nextDouble() * 30);
+        env.put("soilP", 150.0 + RNG.nextDouble() * 30);
+        env.put("soilK", 150.0 + RNG.nextDouble() * 30);
 
         equip.put("fan", false);
         equip.put("water_valve", false);
         equip.put("water_pump", false);
         equip.put("led_light", false);
         equip.put("camera", true);
+        equip.put("heater", false);
+        equip.put("shade", false);
+        equip.put("ventilation", false);
+        equip.put("fertilizer_pump", false);
+        equip.put("mist_sprayer", false);
+        equip.put("fertigation_machine", false);
+        equip.put("air_source_ac", false);
+        equip.put("led_display", false);
+        equip.put("electric_skylight", false);
     }
 
     @PostConstruct
@@ -112,23 +131,27 @@ public class SimNodeSimulator {
         if (!active.get() || !mqttService.isConnected())
             return;
 
-        // 每 10 轮（~30s）查一次数据库，节点删除则停止
+        // Reason: 低频检查数据库存在性，避免每轮 telemetry 都访问数据库，同时能在删除节点后及时停机。
         if (anomalyCycle % 10 == 0 && nodeRepo.findByNodeId(NODE_ID).isEmpty()) {
             log.info("[SimNode] Node {} no longer in DB, stopping simulator.", NODE_ID);
             shutdown();
             return;
         }
 
-        fluctuate("temperature", 0.3, 15.0, 45.0);
-        fluctuate("humidity", 1.0, 20.0, 99.0);
-        fluctuate("light", 200.0, 0.0, 50000.0);
-        fluctuate("co2", 5.0, 200.0, 2000.0);
-        fluctuate("soilTemp", 0.2, 5.0, 40.0);
-        fluctuate("soilHumidity", 0.5, 10.0, 90.0);
+        fluctuate("temperature", 0.3, 20.0, 30.0);
+        fluctuate("humidity", 1.0, 50.0, 70.0);
+        fluctuate("light", 50.0, 300.0, 1500.0);
+        fluctuate("co2", 2.0, 400.0, 450.0);
+        fluctuate("soilTemp", 0.2, 15.0, 25.0);
+        fluctuate("soilHumidity", 0.5, 60.0, 80.0);
+        fluctuate("soilPh", 0.05, 6.0, 7.5);
+        fluctuate("soilN", 3.0, 80.0, 250.0);
+        fluctuate("soilP", 3.0, 80.0, 250.0);
+        fluctuate("soilK", 3.0, 80.0, 250.0);
 
         if ("smart".equals(mode)) {
-            double light = env.getOrDefault("light", 12000.0);
-            ledBrightness = Math.max(0, Math.min(100, (int) ((1.0 - light / 30000.0) * 100)));
+            double light = env.getOrDefault("light", 900.0);
+            ledBrightness = Math.max(0, Math.min(100, (int) ((1.0 - light / 1500.0) * 100)));
             equip.put("led_light", ledBrightness > 0);
         }
 

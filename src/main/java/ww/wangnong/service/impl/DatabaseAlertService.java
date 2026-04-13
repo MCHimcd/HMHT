@@ -17,6 +17,16 @@ import ww.wangnong.repository.AlertRepository;
 import ww.wangnong.service.AlertService;
 import ww.wangnong.service.OperationLogService;
 
+/**
+ * Purpose: AlertService 的数据库实现。
+ * Responsibilities: 控制告警保留上限、转换查询条件、生成前端告警列表并处理告警状态。
+ * Flow: addAlert 写入前执行容量裁剪；queryAlerts 读取全量后按场景/筛选条件裁剪；handleAlert 更新 handled
+ * 状态并记审计。
+ * Dependencies: AlertRepository、OperationLogService。
+ * Input: AlertInfo、查询 Map、告警处理动作。
+ * Output: 告警列表结果或告警状态变更副作用。
+ * Boundary: startup 场景需要优先返回全部未处理告警和有限 handled 告警，不能直接复用普通分页逻辑。
+ */
 @Service
 public class DatabaseAlertService implements AlertService {
 
@@ -33,6 +43,7 @@ public class DatabaseAlertService implements AlertService {
     public void addAlert(AlertInfo info) {
         long count = alertRepo.count();
         if (count >= MAX_SIZE) {
+            // Reason: 告警表被设计为近实时窗口而非无限历史，超过上限时按 createdAt 从旧到新裁剪。
             alertRepo.findAll(Sort.by(Sort.Direction.ASC, "createdAt"))
                     .stream().limit(count - MAX_SIZE + 1)
                     .forEach(alertRepo::delete);
@@ -67,6 +78,7 @@ public class DatabaseAlertService implements AlertService {
 
         List<AlertInfo> items;
         if ("startup".equals(scene)) {
+            // Reason: 首页首屏要求未处理告警完整可见，同时只附带少量已处理最近项，避免重要未处理告警被分页淹没。
             List<AlertInfo> unhandled = all.stream()
                     .filter(a -> !a.getIsHandled()).map(this::toInfo).toList();
             List<AlertInfo> handled = all.stream()

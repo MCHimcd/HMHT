@@ -7,8 +7,12 @@ import org.springframework.core.type.AnnotatedTypeMetadata;
 import ww.wangnong.config.RunMode;
 
 /**
- * 非 Python 路由条件：当 hmht.run.mode 为 mock 或 hardware 时匹配。
- * 用于需要在没有 Python 后端时提供 Mock 实现的场景（如 ChatService）。
+ * Purpose: 实现“无 Python 路由”场景的 Bean 条件判定。
+ * Responsibilities: 判断当前模式是否不依赖 Python 后端，供 mock 替代组件启用。
+ * Flow: Spring 调用 matches -> 解析运行模式 -> 返回 Python 路由是否关闭。
+ * Dependencies: RunMode。
+ * Input: hmht.run.mode 配置。
+ * Output: true 表示 mock/hardware 模式下应装配 Bean。
  */
 public class OnNoPythonRouteCondition implements Condition {
 

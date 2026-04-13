@@ -53,8 +53,14 @@ import ww.wangnong.repository.NodeSensorRepository;
 import ww.wangnong.repository.SensorTypeRepository;
 
 /**
- * 协议控制面持久化服务，处理命令、ACK、能力、影子等数据的持久化。
- * 在桥接模式下激活（bridge/hardware/full）。
+ * Purpose: 承担桥接协议控制面的持久化写入职责。
+ * Responsibilities: 保存命令主表、ACK、接入审计、死信、设备影子、设备档案与 capability 快照，并同步静态节点元数据。
+ * Flow: MqttBridge 在各类协议事件到达后调用对应 record* 方法 -> 本服务写入控制面表 -> 必要时同步
+ * profile/node/capability 明细。
+ * Dependencies: command/device/ingest 相关仓库、Node/Sensor/Equipment 字典仓库。
+ * Input: command/ack/telemetry/capability 的解析结果。
+ * Output: 控制面数据库中的最新命令、影子、审计和 capability 状态。
+ * Boundary: capability 快照写入对同一 deviceId+version 加锁，防止并发到达时重复覆盖或部分写入。
  */
 @Service
 @ConditionalOnBridgeMode
@@ -255,6 +261,7 @@ public class ProtocolPersistenceService {
                 capabilitySnapshotLockKey(safeDeviceId, safeVersion),
                 ignored -> new ReentrantLock());
 
+        // Invariant: 同一 device/version 的 capability 主表与明细必须作为一个串行写入单元，避免并发消息造成主从不一致。
         lock.lock();
         try {
             LocalDateTime reportedAt = toDateTime(reportedAtMs);

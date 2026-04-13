@@ -15,6 +15,15 @@ import org.hibernate.annotations.CreationTimestamp;
 import lombok.Getter;
 import lombok.Setter;
 
+/**
+ * Purpose: 记录设备对控制命令的 ACK 回执流水。
+ * Responsibilities: 保存 commandId、状态码、回执消息、traceId 和原始 payload，支撑命令闭环追踪。
+ * Flow: 硬件 ACK 到达 -> ProtocolPersistenceService 写入 -> CommandAckTracker/查询接口按
+ * commandId 关联。
+ * Dependencies: command_ack 表、CommandRequest 主表。
+ * Input: /hmht/device/{deviceId}/ack 主题解析结果。
+ * Output: 命令回执审计记录。
+ */
 @Entity
 @Table(name = "command_ack", indexes = {
         @Index(name = "idx_cmd_ack_command_id", columnList = "command_id"),

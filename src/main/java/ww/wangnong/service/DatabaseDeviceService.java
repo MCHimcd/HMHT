@@ -20,7 +20,16 @@ import ww.wangnong.repository.DeviceCapabilityRepository;
 import ww.wangnong.repository.DeviceShadowRepository;
 
 /**
- * DeviceService 的数据库实现，所有运行模式共用。
+ * Purpose: 从控制面表聚合设备能力与影子查询结果。
+ * Responsibilities: 读取最新 capability/shadow 快照，拼装控制器所需 DTO，并在 JSON
+ * 反序列化失败时提供可诊断回退值。
+ * Flow: 查询最新 DeviceCapability/DeviceShadow -> 关联 capability 明细 -> 解析 JSON 字段 ->
+ * 返回 DeviceService record。
+ * Dependencies:
+ * DeviceCapabilityRepository、Capability*Repository、DeviceShadowRepository、ObjectMapper。
+ * Input: deviceId。
+ * Output: 设备能力快照或设备影子状态。
+ * Boundary: capability 查询始终依赖最新版本号；shadow/action JSON 解析失败时不能中断查询链路。
  */
 @Service
 public class DatabaseDeviceService implements DeviceService {
@@ -107,6 +116,7 @@ public class DatabaseDeviceService implements DeviceService {
         try {
             return objectMapper.readValue(actionsJson, STRING_LIST_TYPE);
         } catch (Exception e) {
+            // Reason: 历史数据可能写入的是单个字符串而非 JSON 数组，回退为单元素列表以保持接口兼容。
             return List.of(actionsJson);
         }
     }
@@ -118,6 +128,7 @@ public class DatabaseDeviceService implements DeviceService {
         try {
             return objectMapper.readValue(shadowJson, MAP_TYPE);
         } catch (Exception e) {
+            // Reason: 影子字段损坏时仍需把原始内容暴露给调用方，避免查询直接失败且便于排查脏数据。
             Map<String, Object> fallback = new LinkedHashMap<>();
             fallback.put("raw", shadowJson);
             return fallback;

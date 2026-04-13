@@ -29,7 +29,7 @@ class ChatControllerTest {
 
     @Test
     void chat_returnsReply() throws Exception {
-        when(chatService.chat("如何种植番茄？", null))
+        when(chatService.chat("如何种植番茄？", null, null))
                 .thenReturn(new ChatResult("番茄种植建议..."));
 
         mockMvc.perform(post("/v1/agri-qa/chat")

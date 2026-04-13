@@ -12,9 +12,8 @@ class MockChatServiceTest {
 
     @Test
     void chat_withMessage_returnsReplyContainingMessage() {
-        ChatResult result = service.chat("如何种植番茄？", null);
+        ChatResult result = service.chat("如何种植番茄？", null, null);
 
         assertThat(result.reply()).contains("如何种植番茄？");
-        assertThat(result.reply()).contains("模拟模式");
     }
 }

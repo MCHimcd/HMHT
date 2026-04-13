@@ -12,6 +12,14 @@ import org.springframework.web.bind.annotation.RestController;
 import ww.wangnong.dto.ApiResponse;
 import ww.wangnong.service.SensorService;
 
+/**
+ * Purpose: 暴露传感器历史与设备统计查询接口。
+ * Responsibilities: 兼容不同前端字段命名，从混合请求结构中归一化 nodeId 与设备 key 后调用 SensorService。
+ * Flow: 历史接口直接透传 nodeId/metric/range；统计接口先解析 body 与 query 嵌套字段，再执行查询。
+ * Dependencies: SensorService、ApiResponse。
+ * Input: 节点标识、指标名、时间范围，以及带兼容字段的设备统计查询体。
+ * Output: 传感器历史序列或设备统计结果。
+ */
 @RestController
 public class SensorController {
 
@@ -31,6 +39,8 @@ public class SensorController {
 
     @PostMapping("/v1/equipment/stats")
     public ApiResponse<?> getEquipmentStats(@RequestBody Map<String, Object> body) {
+        // Reason: 该接口同时兼容 node_id/device_id、equipment_key/device_type 等历史字段，service
+        // 层只接受归一化后的主键参数。
         @SuppressWarnings("unchecked")
         Map<String, Object> query = body.get("query") instanceof Map<?, ?>
                 ? (Map<String, Object>) body.get("query")
@@ -59,7 +69,8 @@ public class SensorController {
 
     private static String firstNonBlank(String... values) {
         for (String v : values) {
-            if (v != null && !v.isBlank()) return v;
+            if (v != null && !v.isBlank())
+                return v;
         }
         return "";
     }

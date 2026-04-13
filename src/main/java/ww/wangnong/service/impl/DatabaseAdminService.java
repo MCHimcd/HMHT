@@ -18,6 +18,16 @@ import ww.wangnong.service.AdminService;
 import ww.wangnong.service.AuthService;
 import ww.wangnong.service.OperationLogService;
 
+/**
+ * Purpose: AdminService 的数据库实现。
+ * Responsibilities: 校验管理员身份，执行节点生命周期管理和用户节点授权重写，并记录审计日志。
+ * Flow: requireAdmin -> 仓库查询/写入 -> 必要时事务删除关联绑定 -> OperationLogService 记录操作。
+ * Dependencies:
+ * AuthService、NodeRepository、UserRepository、UserNodeAccessRepository、OperationLogService。
+ * Input: 管理员 token、节点标识、用户标识、节点授权列表。
+ * Output: 管理查询结果或持久化副作用。
+ * Boundary: 所有入口都依赖 requireAdmin；绕过该检查会破坏后台权限边界。
+ */
 @Service
 public class DatabaseAdminService implements AdminService {
 
@@ -115,6 +125,7 @@ public class DatabaseAdminService implements AdminService {
     @Transactional
     public void setUserNodeIds(String token, long userId, List<String> nodeIds) {
         User admin = authService.requireAdmin(token);
+        // Invariant: 授权集合采用全量替换语义，先清空旧记录再写入新集合，避免局部增删产生残留授权。
         userNodeAccessRepo.deleteByUserId(userId);
         for (String nodeId : nodeIds) {
             UserNodeAccess access = new UserNodeAccess();

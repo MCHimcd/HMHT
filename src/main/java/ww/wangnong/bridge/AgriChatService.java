@@ -1,8 +1,6 @@
 package ww.wangnong.bridge;
 
-import java.io.File;
-import java.io.IOException;
-import java.nio.file.Files;
+import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
@@ -13,21 +11,23 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Primary;
-import org.springframework.core.io.ByteArrayResource;
 import org.springframework.http.MediaType;
 import org.springframework.stereotype.Service;
-import org.springframework.util.LinkedMultiValueMap;
-import org.springframework.util.MultiValueMap;
 import org.springframework.web.client.RestClient;
 
 import ww.wangnong.config.condition.ConditionalOnPythonRoute;
 import ww.wangnong.service.ChatService;
 
 /**
- * Chat service implementation that proxies requests to the Python agri backend.
- * Python endpoint: POST /api/multi-conversation/chat (multipart/form-data)
- * 
- * 在 Python 路由启用时激活（bridge/full 模式）。
+ * Purpose: 将农业问答请求代理到 agri Python 后端。
+ * Responsibilities: 维护会话 ID、转发文本/图片请求，并把 Python 返回结果收敛为 ChatService 契约。
+ * Flow: chat -> ensureSession -> POST Python chat API -> 解析 reply -> 返回
+ * ChatResult。
+ * Dependencies: RestClient、Python multi-conversation
+ * API、ConditionalOnPythonRoute。
+ * Input: 文本问题、图片 URI、图片 base64。
+ * Output: agri 后端生成的问答回复。
+ * Boundary: 当前实现把默认用户固定映射到一个 session，适合单用户演示，不是多用户隔离方案。
  */
 @Service
 @Primary
@@ -36,11 +36,11 @@ public class AgriChatService implements ChatService {
 
     private static final Logger log = LoggerFactory.getLogger(AgriChatService.class);
     private static final ObjectMapper MAPPER = new ObjectMapper();
-    private static final TypeReference<Map<String, Object>> MAP_TYPE = new TypeReference<>() {};
+    private static final TypeReference<Map<String, Object>> MAP_TYPE = new TypeReference<>() {
+    };
 
     private final RestClient restClient;
 
-    /** Currently we map a fixed user to one session. */
     private final ConcurrentHashMap<String, String> userSessions = new ConcurrentHashMap<>();
     private static final String DEFAULT_USER = "default";
 
@@ -49,34 +49,28 @@ public class AgriChatService implements ChatService {
     }
 
     @Override
-    public ChatResult chat(String message, String imageUri) {
+    public ChatResult chat(String message, String imageUri, String imageBase64) {
         try {
             String sessionId = ensureSession(DEFAULT_USER);
 
-            MultiValueMap<String, Object> parts = new LinkedMultiValueMap<>();
-            parts.add("session_id", sessionId);
-            parts.add("message", message != null ? message : "");
+            // Build JSON request body
+            Map<String, Object> body = new HashMap<>();
+            body.put("session_id", sessionId);
+            body.put("message", message != null ? message : "");
 
-            // If imageUri is a local file path, attach it as multipart file
-            if (imageUri != null && !imageUri.isBlank()) {
-                File imageFile = new File(imageUri);
-                if (imageFile.isFile()) {
-                    byte[] imageBytes = Files.readAllBytes(imageFile.toPath());
-                    parts.add("image", new ByteArrayResource(imageBytes) {
-                        @Override
-                        public String getFilename() {
-                            return imageFile.getName();
-                        }
-                    });
-                } else {
-                    log.warn("[AgriChat] Image path not a valid file: {}", imageUri);
-                }
+            // Include Base64 image if provided
+            if (imageBase64 != null && !imageBase64.isBlank()) {
+                body.put("image_base64", imageBase64);
+                log.debug("[AgriChat] Forwarding Base64 image, size: {} chars", imageBase64.length());
+            } else if (imageUri != null && !imageUri.isBlank()) {
+                // For backward compatibility, log if imageUri is provided without Base64
+                log.warn("[AgriChat] Image URI provided without Base64 (old format): {}", imageUri);
             }
 
             String responseBody = restClient.post()
                     .uri("/api/multi-conversation/chat")
-                    .contentType(MediaType.MULTIPART_FORM_DATA)
-                    .body(parts)
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .body(body)
                     .retrieve()
                     .body(String.class);
 
@@ -93,17 +87,18 @@ public class AgriChatService implements ChatService {
     private String ensureSession(String userId) {
         return userSessions.computeIfAbsent(userId, k -> {
             try {
+                Map<String, Object> body = new HashMap<>();
                 String resp = restClient.post()
                         .uri("/api/multi-conversation/session/new")
                         .contentType(MediaType.APPLICATION_JSON)
-                        .body("{}")
+                        .body(body)
                         .retrieve()
                         .body(String.class);
                 Map<String, Object> result = MAPPER.readValue(resp, MAP_TYPE);
                 String sid = String.valueOf(result.get("session_id"));
                 log.info("[AgriChat] Created new session: {}", sid);
                 return sid;
-            } catch (IOException e) {
+            } catch (Exception e) {
                 throw new RuntimeException("Failed to create chat session", e);
             }
         });

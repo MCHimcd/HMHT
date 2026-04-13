@@ -17,6 +17,14 @@ import ww.wangnong.repository.AlertRepository;
 import ww.wangnong.service.AlertService;
 import ww.wangnong.service.AlertService.AlertInfo;
 
+/**
+ * Purpose: 在 mock 模式下周期性生成演示告警。
+ * Responsibilities: 基于随机模板创建告警、控制未处理告警上限，并同步发布告警 MQTT 消息。
+ * Flow: 定时触发 generate -> 检查未处理数量 -> 随机挑选节点与模板 -> AlertService 入库 -> MQTT 发布。
+ * Dependencies: AlertService、AlertRepository、PahoMqttService。
+ * Input: 当前告警库存量与随机数。
+ * Output: 演示告警记录与 /alert 主题消息。
+ */
 @Component
 @ConditionalOnProperty(name = "hmht.run.mode", havingValue = "mock", matchIfMissing = true)
 public class MockAlertGenerator {

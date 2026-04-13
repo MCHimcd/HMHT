@@ -8,6 +8,15 @@ import org.springframework.web.bind.annotation.RestController;
 import ww.wangnong.dto.ApiResponse;
 import ww.wangnong.service.OperationLogService;
 
+/**
+ * Purpose: 提供后台操作审计日志查询接口。
+ * Responsibilities: 接收分页与筛选条件，并将其透传给 OperationLogService 做统一过滤。
+ * Flow: GET 请求 -> 读取分页/筛选 query param -> OperationLogService.listFiltered ->
+ * ApiResponse.ok。
+ * Dependencies: OperationLogService、ApiResponse。
+ * Input: 页码、页大小、类型、目标标识和时间范围。
+ * Output: 审计日志分页结果。
+ */
 @RestController
 @RequestMapping("/v1/admin/logs")
 public class OperationLogController {

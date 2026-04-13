@@ -18,6 +18,14 @@ import org.hibernate.annotations.UpdateTimestamp;
 import lombok.Getter;
 import lombok.Setter;
 
+/**
+ * Purpose: 保存农业节点主档案。
+ * Responsibilities: 记录节点唯一标识、显示名、所属用户以及基础在线/智能模式状态。
+ * Flow: 管理员或种子流程创建节点 -> NodeService/控制器按 nodeId 查询 -> 桥接或业务逻辑更新状态字段。
+ * Dependencies: nodes 表、User 实体、NodeService。
+ * Input: 节点元数据和归属关系。
+ * Output: 节点主记录。
+ */
 @Entity
 @Table(name = "nodes")
 @Getter

@@ -9,6 +9,14 @@ import jakarta.persistence.Table;
 import lombok.Getter;
 import lombok.Setter;
 
+/**
+ * Purpose: 定义全局设备类型字典。
+ * Responsibilities: 为设备 key 提供名称、图标、可控性和 UI 控件类型等元数据。
+ * Flow: mock 种子或迁移初始化类型 -> NodeService/前端元数据查询按 equipmentKey 读取。
+ * Dependencies: equipment_type 表、NodeService、MockDataLifecycle。
+ * Input: 设备类型定义。
+ * Output: 设备元数据模板。
+ */
 @Entity
 @Table(name = "equipment_type")
 @Getter

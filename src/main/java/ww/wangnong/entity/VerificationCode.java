@@ -14,6 +14,15 @@ import org.hibernate.annotations.CreationTimestamp;
 import lombok.Getter;
 import lombok.Setter;
 
+/**
+ * Purpose: 保存短信验证码发放记录。
+ * Responsibilities: 记录手机号、验证码、过期时间和使用状态，供注册/找回密码校验使用。
+ * Flow: AuthService 发送验证码时写入 -> verifyCode 查询最近未使用且未过期记录 -> 成功后标记 used。
+ * Dependencies: verification_codes 表、AuthService。
+ * Input: 手机号、验证码、过期时间。
+ * Output: 可校验的验证码记录。
+ * Invariant: used=true 或 expires_at 过期后，该记录不应再次通过业务校验。
+ */
 @Entity
 @Table(name = "verification_codes")
 @Getter

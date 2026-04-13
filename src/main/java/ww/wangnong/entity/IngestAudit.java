@@ -15,6 +15,14 @@ import org.hibernate.annotations.CreationTimestamp;
 import lombok.Getter;
 import lombok.Setter;
 
+/**
+ * Purpose: 记录桥接层消息接入审计结果。
+ * Responsibilities: 保存消息类型、来源主题、设备标识、协议版本、traceId 和处理状态，便于接入链路排障。
+ * Flow: MqttBridge 在接收、忽略或成功处理消息后写入 audit 记录。
+ * Dependencies: ingest_audit 表、ProtocolPersistenceService。
+ * Input: 入站消息的上下文元数据。
+ * Output: 接入审计流水。
+ */
 @Entity
 @Table(name = "ingest_audit", indexes = {
         @Index(name = "idx_ingest_audit_device_created", columnList = "device_id,created_at"),

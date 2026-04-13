@@ -31,6 +31,15 @@ import ww.wangnong.bridge.TelemetryTranslator;
 import ww.wangnong.config.RunMode;
 import ww.wangnong.config.RunModeHolder;
 
+/**
+ * Purpose: 封装 HMHT 与 MQTT Broker 的连接、发布和订阅生命周期。
+ * Responsibilities: 管理客户端连接重连、缓存订阅、按消息类型分流执行线程，并暴露简化的 publish/subscribe API。
+ * Flow: @PostConstruct 建连 -> 注册回调 -> 缓存或执行订阅 -> 收到消息后按 topic 类型路由到对应执行器。
+ * Dependencies: MqttProperties、Paho 客户端、RunModeHolder、TelemetryTranslator。
+ * Input: MQTT 配置、发布请求、订阅处理器、Broker 入站消息。
+ * Output: MQTT 生命周期快照、出站消息、副作用回调执行。
+ * Boundary: telemetry 与 command 处理使用单线程执行器串行化，避免同类消息乱序覆盖状态。
+ */
 @Service
 public class PahoMqttService {
 
@@ -377,6 +386,7 @@ public class PahoMqttService {
     }
 
     private ExecutorService selectExecutor(String topicFilter, String topic) {
+        // Invariant: telemetry/command 各自走单线程执行器，桥接层依赖该顺序语义避免旧状态晚到覆盖新状态。
         if (isCommandTopic(topicFilter, topic)) {
             return commandExecutor;
         }

@@ -18,6 +18,16 @@ import ww.wangnong.mqtt.PahoMqttService;
 import ww.wangnong.repository.ScheduledTaskRepository;
 import ww.wangnong.service.OperationLogService;
 
+/**
+ * Purpose: 在 mock 模式下执行数据库中的定时任务定义。
+ * Responsibilities: 按分钟扫描启用任务、匹配重复日规则、发布控制命令并记录操作日志。
+ * Flow: executeDueTasks 定时触发 -> 读取 enabled 任务 -> 匹配 hour/minute/repeatDays ->
+ * executeTask 发布 MQTT 命令。
+ * Dependencies: ScheduledTaskRepository、PahoMqttService、OperationLogService。
+ * Input: 当前时间与启用任务列表。
+ * Output: 已发布的 mock command 与操作日志。
+ * Boundary: 该执行器只在 MQTT 可用时执行任务，避免数据库状态与模拟设备状态脱节。
+ */
 @Component
 @ConditionalOnProperty(name = "hmht.run.mode", havingValue = "mock", matchIfMissing = true)
 public class MockTaskExecutor {

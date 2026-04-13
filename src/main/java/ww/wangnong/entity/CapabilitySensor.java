@@ -15,9 +15,17 @@ import org.hibernate.annotations.CreationTimestamp;
 import lombok.Getter;
 import lombok.Setter;
 
+/**
+ * Purpose: 持久化设备 capability 快照中的传感器能力明细。
+ * Responsibilities: 记录传感器 key、数据类型、单位、取值范围和必填约束，供设备能力查询与节点元数据聚合使用。
+ * Flow: capability 主题入库 -> NodeService/DeviceService 按版本读取 -> 返回给前端能力视图。
+ * Dependencies: capability_sensor 表、DeviceCapability 主快照。
+ * Input: capability payload 中的 sensors 节点。
+ * Output: 传感器能力明细。
+ */
 @Entity
 @Table(name = "capability_sensor", uniqueConstraints = {
-        @UniqueConstraint(name = "uk_cap_sensor", columnNames = {"device_id", "capability_version", "sensor_key"})
+        @UniqueConstraint(name = "uk_cap_sensor", columnNames = { "device_id", "capability_version", "sensor_key" })
 })
 @Getter
 @Setter

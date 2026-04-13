@@ -7,7 +7,12 @@ import org.springframework.core.type.AnnotatedTypeMetadata;
 import ww.wangnong.config.RunMode;
 
 /**
- * Python 路由条件：当 hmht.run.mode 为 bridge 或 full 时匹配。
+ * Purpose: 实现 Python 路由 Bean 条件判定。
+ * Responsibilities: 判断当前模式是否需要与 agri Python 后端交互。
+ * Flow: Spring 调用 matches -> 解析运行模式 -> 返回 Python 路由是否启用。
+ * Dependencies: RunMode。
+ * Input: hmht.run.mode 配置。
+ * Output: true 表示 bridge/full 模式下应装配 Bean。
  */
 public class OnPythonRouteCondition implements Condition {
 

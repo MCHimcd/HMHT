@@ -12,6 +12,15 @@ import org.slf4j.LoggerFactory;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
 import org.springframework.stereotype.Service;
 
+/**
+ * Purpose: 为 mock 数据生成与历史回填提供 InfluxDB 写入能力。
+ * Responsibilities: 以 line protocol 形式写入环境指标和设备状态 measurement。
+ * Flow: MockDataLifecycle/MockMqttSimulator 调用写入方法 -> 组装 line protocol -> 使用
+ * InfluxDBClient 落库。
+ * Dependencies: InfluxDBClient、hmht.influxdb.enabled 相关装配。
+ * Input: deviceId、毫秒时间戳、环境指标或设备状态 map。
+ * Output: InfluxDB 中的环境与设备状态时序数据。
+ */
 @Service
 @ConditionalOnBean(InfluxDBClient.class)
 public class InfluxTelemetryService {

@@ -36,6 +36,17 @@ import ww.wangnong.service.OperationLogService;
 
 import org.springframework.security.crypto.password.PasswordEncoder;
 
+/**
+ * Purpose: 管理 mock 模式下的种子数据初始化与退出清理。
+ * Responsibilities: 初始化演示用户、节点、字典、绑定、Influx 历史、告警与操作日志，并在停机时清空演示数据。
+ * Flow: 启动时 run 判断是否已有节点 -> 增量重建或全量 seed；停机时 cleanup 关闭外键后按表顺序 TRUNCATE。
+ * Dependencies: 多个
+ * Repository、InfluxTelemetryService、JdbcTemplate、PasswordEncoder、AlertService。
+ * Input: 当前数据库状态、Influx 启用情况。
+ * Output: 完整的 mock 演示数据集。
+ * Side Effects: 大量写入数据库与 InfluxDB；停机时会清空 mock 相关表。
+ * Boundary: cleanup 依赖手工表顺序和关闭外键检查，不能在非 mock 运行环境误触发。
+ */
 @Component
 @ConditionalOnProperty(name = "hmht.run.mode", havingValue = "mock", matchIfMissing = true)
 public class MockDataLifecycle implements ApplicationRunner {
@@ -87,7 +98,9 @@ public class MockDataLifecycle implements ApplicationRunner {
     @Override
     public void run(ApplicationArguments args) {
         if (nodeRepo.count() > 0) {
+            seedSensorTypes();
             seedEquipmentTypes();
+            reseedSimNodeBindings();
             log.info("[MockData] 模拟节点已存在，重建种子告警...");
             // 删除旧种子告警并重建，确保每次启动都有多样化告警
             for (int i = 1; i <= 5; i++) {
@@ -113,6 +126,7 @@ public class MockDataLifecycle implements ApplicationRunner {
                 "chat_messages", "alerts", "node_sensor",
                 "node_equipment", "sensor_type", "equipment_type",
                 "verification_codes", "nodes", "users" };
+        // Invariant: cleanup 通过关闭外键并按固定顺序 TRUNCATE，目标是把 mock 环境恢复到“仅剩基础结构”的状态。
         jdbc.execute("SET FOREIGN_KEY_CHECKS = 0");
         for (String table : tables) {
             try {
@@ -153,7 +167,7 @@ public class MockDataLifecycle implements ApplicationRunner {
         // 2. 节点
         seedNode(user, "A03_Node_01", "温室节点 1");
         seedNode(user, "A03_Node_02", "温室节点 2");
-        seedSimNode("SIM_Node_01", "全模拟演示节点");
+        seedSimNode("SIM_Node_01", "温室节点 3");
 
         // 3. 全局传感器类型 (13 种：基础 6 + 扩展 7)
         seedSensorTypes();
@@ -203,13 +217,13 @@ public class MockDataLifecycle implements ApplicationRunner {
         // A03 节点：基础 6 传感器 + 4 设备
         for (String nodeId : new String[] { "A03_Node_01", "A03_Node_02" }) {
             double temp = 22.0, hum = 55.0, co2 = 420.0;
-            double light = 8000.0, soilT = 18.0, soilH = 35.0;
+            double light = 900.0, soilT = 18.0, soilH = 35.0;
 
             for (long ts = now - thirtyDaysMs; ts <= now; ts += intervalMs) {
                 temp = drift(rng, temp, 0.5, 10, 42);
                 hum = drift(rng, hum, 1.5, 20, 98);
                 co2 = drift(rng, co2, 8, 200, 2000);
-                light = drift(rng, light, 300, 0, 50000);
+                light = drift(rng, light, 50, 300, 1500);
                 soilT = drift(rng, soilT, 0.3, 3, 38);
                 soilH = drift(rng, soilH, 0.8, 10, 85);
 
@@ -222,34 +236,30 @@ public class MockDataLifecycle implements ApplicationRunner {
                 Map<String, Boolean> eq = Map.of(
                         "water_valve", rng.nextDouble() < 0.1,
                         "water_pump", rng.nextDouble() < 0.15,
-                        "led_light", light < 5000,
+                        "led_light", light < 600,
                         "fan", temp > 30,
                         "camera", true);
                 influxService.writeEquipmentState(nodeId, ts, eq, "manual");
             }
         }
 
-        // SIM_Node_01：全量 13 传感器 + 10 设备
+        // SIM_Node_01：温室全模拟 10 传感器 + 14 设备
         {
-            double temp = 24.0, hum = 60.0, co2 = 450.0, light = 12000.0;
-            double soilT = 20.0, soilH = 40.0, soilPh = 6.5;
-            double soilN = 120.0, soilP = 35.0, soilK = 150.0;
-            double wind = 2.5, rain = 0.0, pressure = 1013.0;
+            double temp = 25.0, hum = 60.0, co2 = 425.0, light = 900.0;
+            double soilT = 20.0, soilH = 70.0, soilPh = 6.8;
+            double soilN = 165.0, soilP = 165.0, soilK = 165.0;
 
             for (long ts = now - thirtyDaysMs; ts <= now; ts += intervalMs) {
-                temp = drift(rng, temp, 0.6, 8, 45);
-                hum = drift(rng, hum, 2.0, 15, 99);
-                co2 = drift(rng, co2, 10, 200, 2500);
-                light = drift(rng, light, 400, 0, 60000);
-                soilT = drift(rng, soilT, 0.4, 2, 40);
-                soilH = drift(rng, soilH, 1.0, 5, 90);
-                soilPh = drift(rng, soilPh, 0.05, 4.0, 9.0);
-                soilN = drift(rng, soilN, 3, 20, 300);
-                soilP = drift(rng, soilP, 1.5, 5, 120);
-                soilK = drift(rng, soilK, 4, 30, 350);
-                wind = drift(rng, wind, 0.8, 0, 30);
-                rain = drift(rng, rain, 0.5, 0, 80);
-                pressure = drift(rng, pressure, 1.2, 960, 1060);
+                temp = drift(rng, temp, 0.4, 20, 30);
+                hum = drift(rng, hum, 0.8, 50, 70);
+                co2 = drift(rng, co2, 2, 400, 450);
+                light = drift(rng, light, 50, 300, 1500);
+                soilT = drift(rng, soilT, 0.3, 15, 25);
+                soilH = drift(rng, soilH, 0.6, 60, 80);
+                soilPh = drift(rng, soilPh, 0.03, 6.0, 7.5);
+                soilN = drift(rng, soilN, 3, 80, 250);
+                soilP = drift(rng, soilP, 3, 80, 250);
+                soilK = drift(rng, soilK, 3, 80, 250);
 
                 Map<String, Double> env = new java.util.HashMap<>();
                 env.put("temperature", round1(temp));
@@ -262,22 +272,23 @@ public class MockDataLifecycle implements ApplicationRunner {
                 env.put("soilN", round1(soilN));
                 env.put("soilP", round1(soilP));
                 env.put("soilK", round1(soilK));
-                env.put("windSpeed", round1(wind));
-                env.put("rainfall", round1(rain));
-                env.put("pressure", round1(pressure));
                 influxService.writeEnvironment("SIM_Node_01", ts, env);
 
                 Map<String, Boolean> eq = new java.util.HashMap<>();
                 eq.put("water_valve", rng.nextDouble() < 0.12);
                 eq.put("water_pump", rng.nextDouble() < 0.15);
-                eq.put("led_light", light < 5000);
+                eq.put("led_light", light < 600);
                 eq.put("camera", true);
-                eq.put("fan", temp > 30);
-                eq.put("heater", temp < 12);
-                eq.put("shade", light > 40000);
-                eq.put("ventilation", co2 > 1200);
+                eq.put("fan", temp > 28);
+                eq.put("heater", temp < 18);
+                eq.put("shade", light > 1300);
+                eq.put("ventilation", co2 > 440);
                 eq.put("fertilizer_pump", rng.nextDouble() < 0.05);
-                eq.put("mist_sprayer", hum < 35);
+                eq.put("mist_sprayer", hum < 55);
+                eq.put("fertigation_machine", rng.nextDouble() < 0.08);
+                eq.put("air_source_ac", temp > 28 || temp < 18);
+                eq.put("led_display", true);
+                eq.put("electric_skylight", temp > 27);
                 influxService.writeEquipmentState("SIM_Node_01", ts, eq, "manual");
             }
         }
@@ -314,8 +325,6 @@ public class MockDataLifecycle implements ApplicationRunner {
     }
 
     private void seedSensorTypes() {
-        if (sensorTypeRepo.count() > 0)
-            return;
         record ST(String key, String name, String unit, String icon, String badgeColor, String bgColor) {
         }
 
@@ -323,7 +332,7 @@ public class MockDataLifecycle implements ApplicationRunner {
                 new ST("temperature", "空气温度", "℃", "🌡️", "#FF7043", "#FFF3E0"),
                 new ST("humidity", "空气湿度", "%", "💧", "#42A5F5", "#E3F2FD"),
                 new ST("co2", "CO₂浓度", "ppm", "🫧", "#78909C", "#ECEFF1"),
-                new ST("light", "光照强度", "Lux", "☀️", "#FDD835", "#FFFDE7"),
+                new ST("light", "光照强度(PAR)", "μmol/m²·s", "☀️", "#FDD835", "#FFFDE7"),
                 new ST("soilTemp", "土壤温度", "℃", "🌱", "#8D6E63", "#EFEBE9"),
                 new ST("soilHumidity", "土壤湿度", "%", "🪴", "#66BB6A", "#E8F5E9"),
                 new ST("soilPh", "土壤pH值", "", "🧪", "#AB47BC", "#F3E5F5"),
@@ -335,7 +344,7 @@ public class MockDataLifecycle implements ApplicationRunner {
                 new ST("pressure", "大气压", "hPa", "🌐", "#78909C", "#ECEFF1"));
 
         for (ST s : types) {
-            SensorType t = new SensorType();
+            SensorType t = sensorTypeRepo.findBySensorKey(s.key()).orElseGet(SensorType::new);
             t.setSensorKey(s.key());
             t.setName(s.name());
             t.setUnit(s.unit());
@@ -360,7 +369,11 @@ public class MockDataLifecycle implements ApplicationRunner {
                 new ET("shade", "遮阳帘", "🪟", true, "toggle"),
                 new ET("ventilation", "通风窗", "🪁", true, "toggle"),
                 new ET("fertilizer_pump", "施肥泵", "🧴", true, "toggle"),
-                new ET("mist_sprayer", "喷雾器", "🌫️", true, "toggle"));
+                new ET("mist_sprayer", "喷雾器", "🌫️", true, "toggle"),
+                new ET("fertigation_machine", "水肥一体机", "🚿", true, "toggle"),
+                new ET("air_source_ac", "空气能空调", "❄️", true, "toggle"),
+                new ET("led_display", "LED显示屏", "📺", true, "toggle"),
+                new ET("electric_skylight", "电动天窗", "🪟", true, "toggle"));
 
         for (ET e : types) {
             EquipmentType t = equipmentTypeRepo.findByEquipmentKey(e.key()).orElseGet(EquipmentType::new);
@@ -404,25 +417,22 @@ public class MockDataLifecycle implements ApplicationRunner {
         }
     }
 
-    /** SIM_Node_01: 全量传感器（13 种）+ 完整阈值 */
+    /** SIM_Node_01: 温室全模拟传感器（10 种）+ 完整阈值 */
     private void seedSimNodeSensors(String nodeId) {
         record NS(String key, Double warnMin, Double warnMax) {
         }
 
         List<NS> sensors = List.of(
-                new NS("temperature", 10.0, 35.0),
-                new NS("humidity", 30.0, 85.0),
-                new NS("co2", 300.0, 1500.0),
-                new NS("light", 1000.0, 50000.0),
-                new NS("soilTemp", 5.0, 35.0),
-                new NS("soilHumidity", 20.0, 80.0),
-                new NS("soilPh", 5.5, 7.5),
-                new NS("soilN", 50.0, 200.0),
-                new NS("soilP", 10.0, 80.0),
-                new NS("soilK", 80.0, 250.0),
-                new NS("windSpeed", null, 20.0),
-                new NS("rainfall", null, 50.0),
-                new NS("pressure", 980.0, 1040.0));
+                new NS("temperature", 18.0, 32.0),
+                new NS("humidity", 45.0, 75.0),
+                new NS("co2", 350.0, 500.0),
+                new NS("light", 200.0, 1600.0),
+                new NS("soilTemp", 13.0, 27.0),
+                new NS("soilHumidity", 55.0, 85.0),
+                new NS("soilPh", 5.5, 8.0),
+                new NS("soilN", 60.0, 280.0),
+                new NS("soilP", 60.0, 280.0),
+                new NS("soilK", 60.0, 280.0));
 
         for (NS s : sensors) {
             NodeSensor ns = new NodeSensor();
@@ -434,15 +444,33 @@ public class MockDataLifecycle implements ApplicationRunner {
         }
     }
 
-    /** SIM_Node_01: 全量设备（10 种） */
+    /** SIM_Node_01: 全量设备（14 种） */
     private void seedSimNodeEquipment(String nodeId) {
         for (String key : List.of("water_valve", "water_pump", "led_light", "camera",
-                "fan", "heater", "shade", "ventilation", "fertilizer_pump", "mist_sprayer")) {
+                "fan", "heater", "shade", "ventilation", "fertilizer_pump", "mist_sprayer",
+                "fertigation_machine", "air_source_ac", "led_display", "electric_skylight")) {
             NodeEquipment ne = new NodeEquipment();
             ne.setNodeId(nodeId);
             ne.setEquipmentKey(key);
             nodeEquipmentRepo.save(ne);
         }
+    }
+
+    /** 重新播种 SIM_Node_01 的传感器与设备绑定（热重启时修复旧配置） */
+    private void reseedSimNodeBindings() {
+        String nodeId = "SIM_Node_01";
+        if (nodeRepo.findByNodeId(nodeId).isEmpty())
+            return;
+
+        // 清除旧绑定
+        nodeSensorRepo.deleteByNodeId(nodeId);
+        nodeEquipmentRepo.deleteByNodeId(nodeId);
+
+        // 重新播种
+        seedSimNodeSensors(nodeId);
+        seedSimNodeEquipment(nodeId);
+        log.info("[MockData] SIM_Node_01 传感器({})与设备绑定已重建。",
+                nodeSensorRepo.findByNodeId(nodeId).size());
     }
 
     private void seedAlerts() {

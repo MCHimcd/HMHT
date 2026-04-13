@@ -640,7 +640,6 @@ else {
 
 if ($Mode -in @("bridge", "full")) {
     $pythonScripts = @(
-        [pscustomobject]@{ Name = "Mock Device"; Entry = "mock_device.py" },
         [pscustomobject]@{ Name = "Backend"; Entry = "backend_main_debug.py" },
         [pscustomobject]@{ Name = "Flask"; Entry = "web_server_debug.py" }
     )

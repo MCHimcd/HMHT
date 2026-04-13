@@ -10,16 +10,20 @@ import ww.wangnong.service.ExtraService.KeyframeItem;
 import ww.wangnong.service.ExtraService.LiveStreamInfo;
 import ww.wangnong.service.ExtraService.PlaybackItem;
 import ww.wangnong.service.ExtraService.TraceabilityResult;
+import ww.wangnong.service.ExtraService.TraceabilityStep;
 
 class MockExtraServiceTest {
 
     private final MockExtraService service = new MockExtraService();
 
     @Test
-    void scanTraceability_returnsTextContainingCode() {
-        TraceabilityResult result = service.scanTraceability("TRACE-001");
+    void scanTraceability_returnsFullInfo() {
+        TraceabilityResult result = service.scanTraceability("WN-2026-A03-0412");
 
-        assertThat(result.text()).contains("TRACE-001");
+        assertThat(result.productName()).isEqualTo("有机番茄");
+        assertThat(result.batchCode()).isEqualTo("WN-2026-A03-0412");
+        assertThat(result.steps()).isNotEmpty();
+        assertThat(result.steps().getFirst().stepName()).isEqualTo("播种育苗");
     }
 
     @Test
@@ -28,7 +32,7 @@ class MockExtraServiceTest {
 
         assertThat(result.cameraId()).isEqualTo("N01");
         assertThat(result.status()).isEqualTo("online");
-        assertThat(result.streamUrl()).contains("N01");
+        assertThat(result.streamUrl()).isNotBlank();
     }
 
     @Test

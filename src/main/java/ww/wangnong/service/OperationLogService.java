@@ -13,6 +13,14 @@ import org.springframework.stereotype.Service;
 import ww.wangnong.entity.OperationLog;
 import ww.wangnong.repository.OperationLogRepository;
 
+/**
+ * Purpose: 负责后台操作审计日志的写入与分页查询。
+ * Responsibilities: 将业务动作写入 operation_logs，并提供分页、用户维度和时间区间筛选视图。
+ * Flow: 业务服务调用 log 写入审计；控制器调用 list/listFiltered/listByUser 获取分页结果。
+ * Dependencies: OperationLogRepository、Spring Data 分页。
+ * Input: 操作类型、操作人、目标信息、分页参数、时间筛选参数。
+ * Output: 审计记录分页结果或持久化后的日志副作用。
+ */
 @Service
 public class OperationLogService {
 
@@ -103,6 +111,7 @@ public class OperationLogService {
         if (dateStr == null || dateStr.isBlank()) {
             return null;
         }
+        // Boundary: 结束日期按当天最后一刻闭区间处理，避免前端按日期筛选时漏掉尾日记录。
         return LocalDate.parse(dateStr).atTime(LocalTime.MAX);
     }
 }

@@ -9,10 +9,13 @@ import java.lang.annotation.Target;
 import org.springframework.context.annotation.Conditional;
 
 /**
- * 条件注解：在桥接模式（bridge/hardware/full）时激活组件。
- * 即非 mock 模式时激活。
+ * Purpose: 标记仅在桥接链路启用时装配的 Bean。
+ * Responsibilities: 把 bridge/hardware/full 三种模式共享的激活条件抽象为可复用注解。
+ * Flow: 组件标注该注解 -> Spring 调用 OnBridgeModeCondition.matches -> 条件满足时注册 Bean。
+ * Dependencies: OnBridgeModeCondition。
+ * Output: 条件成立时的 Bean 装配结果。
  */
-@Target({ElementType.TYPE, ElementType.METHOD})
+@Target({ ElementType.TYPE, ElementType.METHOD })
 @Retention(RetentionPolicy.RUNTIME)
 @Documented
 @Conditional(OnBridgeModeCondition.class)

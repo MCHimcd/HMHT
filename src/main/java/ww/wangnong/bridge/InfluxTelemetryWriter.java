@@ -13,7 +13,15 @@ import org.springframework.stereotype.Component;
 import jakarta.annotation.Nullable;
 
 /**
- * Writes translated telemetry data to InfluxDB.
+ * Purpose: 将已翻译的 App 格式遥测写入 InfluxDB。
+ * Responsibilities: 把环境指标写入 environment/telemetry_metric，把设备状态写入
+ * equipment_state，并兼顾新旧查询兼容。
+ * Flow: MqttBridge/SimNodeSimulator 调用 writeTelemetry -> 提取环境和设备字段 -> 生成 line
+ * protocol -> 写入 InfluxDB。
+ * Dependencies: InfluxDBClient、TelemetryTranslator。
+ * Input: nodeId、App 格式 telemetry payload。
+ * Output: InfluxDB 中的时序记录。
+ * Boundary: 允许 influxClient 为空时静默跳过，避免未启用时序库时影响主链路。
  */
 @Component
 public class InfluxTelemetryWriter {
@@ -27,11 +35,6 @@ public class InfluxTelemetryWriter {
         this.influxClient = influxClient;
     }
 
-    /**
-     * Write a translated App-format telemetry payload to InfluxDB.
-     * Environment fields go to "environment" measurement,
-     * equipment states go to "equipment_state" measurement.
-     */
     public void writeTelemetry(String nodeId, Map<String, Object> appPayload) {
         if (influxClient == null) {
             return;
@@ -39,9 +42,7 @@ public class InfluxTelemetryWriter {
         try {
             WriteOptions opts = new WriteOptions(null, WritePrecision.MS, null);
 
-            // Dual-write for compatibility: keep legacy environment measurement and write
-            // the
-            // dynamic metric measurement for new queries.
+            // Reason: 兼容历史查询仍依赖 environment measurement，同时为新查询补写 telemetry_metric 动态指标表。
             StringBuilder envLine = new StringBuilder("environment,node=").append(escape(nodeId)).append(' ');
             Map<String, Object> envData = TelemetryTranslator.extractEnvironment(appPayload);
             String source = resolveSource(appPayload);

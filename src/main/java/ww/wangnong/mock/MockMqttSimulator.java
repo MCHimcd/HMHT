@@ -23,6 +23,16 @@ import ww.wangnong.repository.NodeSensorRepository;
 import ww.wangnong.service.AlertService;
 import ww.wangnong.service.OperationLogService;
 
+/**
+ * Purpose: 在 mock 模式下模拟普通节点的 MQTT 遥测、控制与告警行为。
+ * Responsibilities: 维护节点环境/设备状态内存模型，发布 telemetry，消费 command，并按阈值生成告警。
+ * Flow: 启动订阅 command -> 周期性波动环境并发布 telemetry -> 定时检查阈值 -> 生成告警与操作日志。
+ * Dependencies:
+ * PahoMqttService、InfluxTelemetryService、NodeSensorRepository、AlertService、OperationLogService。
+ * Input: MQTT command、阈值配置、随机数。
+ * Output: mock telemetry、告警 MQTT 消息、Influx 历史与操作日志。
+ * Boundary: 节点状态仅存在内存中，服务重启后会回到默认模拟状态。
+ */
 @Component
 @ConditionalOnProperty(name = "hmht.run.mode", havingValue = "mock", matchIfMissing = true)
 public class MockMqttSimulator {
@@ -66,7 +76,7 @@ public class MockMqttSimulator {
             "temperature", "℃",
             "humidity", "%",
             "co2", "ppm",
-            "light", "Lux",
+            "light", "μmol/m²·s",
             "soilTemp", "℃",
             "soilHumidity", "%");
 
@@ -85,7 +95,7 @@ public class MockMqttSimulator {
             ConcurrentHashMap<String, Double> env = new ConcurrentHashMap<>();
             env.put("temperature", 25.0 + RNG.nextDouble() * 2);
             env.put("humidity", 58.0 + RNG.nextDouble() * 4);
-            env.put("light", 10000.0);
+            env.put("light", 900.0);
             env.put("co2", 400.0 + RNG.nextDouble() * 20);
             env.put("soilTemp", 20.0 + RNG.nextDouble());
             env.put("soilHumidity", 40.0 + RNG.nextDouble() * 2);
@@ -131,7 +141,7 @@ public class MockMqttSimulator {
 
             fluctuate(env, "temperature", 0.3, 15.0, 45.0);
             fluctuate(env, "humidity", 1.0, 20.0, 99.0);
-            fluctuate(env, "light", 200.0, 0.0, 50000.0);
+            fluctuate(env, "light", 50.0, 300.0, 1500.0);
             fluctuate(env, "co2", 5.0, 200.0, 2000.0);
             fluctuate(env, "soilTemp", 0.2, 5.0, 40.0);
             fluctuate(env, "soilHumidity", 0.5, 10.0, 90.0);
@@ -140,8 +150,9 @@ public class MockMqttSimulator {
             // mapping)
             String mode = nodeModes.getOrDefault(nodeId, "manual");
             if ("smart".equals(mode)) {
-                double light = env.getOrDefault("light", 25000.0);
-                int autoBrightness = Math.max(0, Math.min(100, (int) ((1.0 - light / 30000.0) * 100)));
+                // Reason: smart 模式下 LED 亮度由光照反推，手动设置会被自动控制逻辑覆盖。
+                double light = env.getOrDefault("light", 900.0);
+                int autoBrightness = Math.max(0, Math.min(100, (int) ((1.0 - light / 1500.0) * 100)));
                 nodeLedBrightness.put(nodeId, autoBrightness);
                 ConcurrentHashMap<String, Boolean> eqRef = nodeEquipments.get(nodeId);
                 if (eqRef != null) {

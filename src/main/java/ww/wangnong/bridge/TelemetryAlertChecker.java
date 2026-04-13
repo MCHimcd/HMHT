@@ -20,8 +20,14 @@ import ww.wangnong.repository.SensorTypeRepository;
 import ww.wangnong.service.AlertService;
 
 /**
- * 通用遥测阈值检查器，供桥接模式和模拟节点共用。
- * 当传感器值超出 node_sensor 的 warning_min/warning_max 时生成告警。
+ * Purpose: 对翻译后的环境遥测执行节点级阈值检查。
+ * Responsibilities: 读取 node_sensor 阈值配置、判断越界、应用告警冷却时间，并写入告警与 MQTT 通知。
+ * Flow: 桥接或模拟节点传入 environment 数据 -> 遍历阈值配置 -> 生成告警 -> 发布 /alert 主题。
+ * Dependencies:
+ * NodeSensorRepository、SensorTypeRepository、AlertService、PahoMqttService。
+ * Input: nodeId 与 App 格式 environment 数据。
+ * Output: 告警记录与前端告警 MQTT 消息。
+ * Boundary: 同一 nodeId:sensorKey 在冷却窗口内最多触发一次告警，避免抖动传感器刷屏。
  */
 @Component
 public class TelemetryAlertChecker {

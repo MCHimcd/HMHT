@@ -16,18 +16,16 @@ import org.springframework.context.annotation.Import;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
-import org.springframework.test.context.TestPropertySource;
-
 import ww.wangnong.config.SecurityConfig;
 import ww.wangnong.service.ExtraService;
 import ww.wangnong.service.ExtraService.KeyframeItem;
 import ww.wangnong.service.ExtraService.LiveStreamInfo;
 import ww.wangnong.service.ExtraService.PlaybackItem;
 import ww.wangnong.service.ExtraService.TraceabilityResult;
+import ww.wangnong.service.ExtraService.TraceabilityStep;
 
 @WebMvcTest(ExtraController.class)
 @Import(SecurityConfig.class)
-@TestPropertySource(properties = "hmht.run.mode=mock")
 class ExtraControllerTest {
 
         @Autowired
@@ -39,7 +37,15 @@ class ExtraControllerTest {
         @Test
         void scanTraceability_returnsResult() throws Exception {
                 when(extraService.scanTraceability("CODE-001"))
-                                .thenReturn(new TraceabilityResult("溯源码 CODE-001 已记录"));
+                                .thenReturn(new TraceabilityResult(
+                                                "有机番茄", "CODE-001", "千禧小番茄",
+                                                "山东省寿光市", "鸿蒙慧田", "A03",
+                                                "2026-01-15", "2026-04-10", "7天",
+                                                "绿色A级", "GR-001", "张明远", "2026-04-11",
+                                                java.util.List.of(new TraceabilityStep(
+                                                                "播种育苗", "李大田",
+                                                                "2026-01-15 08:30", "A03 育苗室",
+                                                                "发芽率96%"))));
 
                 mockMvc.perform(post("/v1/traceability/scan")
                                 .contentType(MediaType.APPLICATION_JSON)
@@ -47,7 +53,9 @@ class ExtraControllerTest {
                                                 {"code":"CODE-001"}"""))
                                 .andExpect(status().isOk())
                                 .andExpect(jsonPath("$.code").value(200))
-                                .andExpect(jsonPath("$.data.text").value("溯源码 CODE-001 已记录"));
+                                .andExpect(jsonPath("$.data.productName").value("有机番茄"))
+                                .andExpect(jsonPath("$.data.batchCode").value("CODE-001"))
+                                .andExpect(jsonPath("$.data.steps[0].stepName").value("播种育苗"));
         }
 
         @Test

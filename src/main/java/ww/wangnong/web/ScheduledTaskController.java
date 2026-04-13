@@ -13,6 +13,16 @@ import org.springframework.web.bind.annotation.RestController;
 import ww.wangnong.dto.ApiResponse;
 import ww.wangnong.service.ScheduledTaskService;
 
+/**
+ * Purpose: 暴露用户定时任务的查询与增删改停用接口。
+ * Responsibilities: 将任务请求体映射为 service 参数，统一处理用户 token 提取，保持控制器层无排程业务逻辑。
+ * Flow: HTTP 请求 -> extractToken -> ScheduledTaskService 执行 CRUD 或启停 ->
+ * ApiResponse.ok。
+ * Dependencies: ScheduledTaskService、ApiResponse。
+ * Input: Bearer token、任务标识、设备动作与重复周期字段。
+ * Output: 任务列表、创建/更新结果或空成功响应。
+ * Side Effects: 变更数据库中的任务定义及启用状态。
+ */
 @RestController
 @RequestMapping("/v1/tasks")
 public class ScheduledTaskController {

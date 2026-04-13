@@ -15,9 +15,20 @@ import org.hibernate.annotations.CreationTimestamp;
 import lombok.Getter;
 import lombok.Setter;
 
+/**
+ * Purpose: 持久化设备 capability 快照中的设备控制项明细。
+ * Responsibilities: 记录某个 deviceId 在某个 capabilityVersion 下的
+ * equipmentKey、可控性与动作列表。
+ * Flow: MqttBridge 收到 capability 主题 -> ProtocolPersistenceService 写入 ->
+ * DeviceService/NodeService 查询聚合。
+ * Dependencies: capability_equipment 表、DeviceCapability 主快照。
+ * Input: 硬件 capability payload 中的 equipments 节点。
+ * Output: 设备控制能力明细。
+ */
 @Entity
 @Table(name = "capability_equipment", uniqueConstraints = {
-        @UniqueConstraint(name = "uk_cap_equipment", columnNames = {"device_id", "capability_version", "equipment_key"})
+        @UniqueConstraint(name = "uk_cap_equipment", columnNames = { "device_id", "capability_version",
+                "equipment_key" })
 })
 @Getter
 @Setter

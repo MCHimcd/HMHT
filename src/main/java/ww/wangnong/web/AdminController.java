@@ -16,6 +16,16 @@ import org.springframework.web.bind.annotation.RestController;
 import ww.wangnong.dto.ApiResponse;
 import ww.wangnong.service.AdminService;
 
+/**
+ * Purpose: 提供管理员节点与用户权限管理接口。
+ * Responsibilities: 管理节点增删改、用户角色与节点授权，并统一从 Authorization 头提取业务 token。
+ * Flow: HTTP 请求 -> 解析 path/body -> extractToken -> AdminService 权限校验与执行 ->
+ * ApiResponse.ok。
+ * Dependencies: AdminService、ApiResponse。
+ * Input: Bearer token、节点标识、用户标识、授权节点列表。
+ * Output: 管理动作成功响应或查询结果列表。
+ * Side Effects: 触发节点元数据变更、用户角色变更和访问权限重写。
+ */
 @RestController
 @RequestMapping("/v1/admin")
 public class AdminController {

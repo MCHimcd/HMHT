@@ -9,9 +9,13 @@ import java.lang.annotation.Target;
 import org.springframework.context.annotation.Conditional;
 
 /**
- * 条件注解：仅在 Mock 模式（hmht.run.mode=mock 或未配置）时激活组件。
+ * Purpose: 标记仅在 mock 模式装配的 Bean。
+ * Responsibilities: 把默认 mock 模式条件封装为统一注解。
+ * Flow: 组件标注该注解 -> Spring 调用 OnMockModeCondition.matches -> 条件满足时注册 Bean。
+ * Dependencies: OnMockModeCondition。
+ * Output: 条件成立时的 Bean 装配结果。
  */
-@Target({ElementType.TYPE, ElementType.METHOD})
+@Target({ ElementType.TYPE, ElementType.METHOD })
 @Retention(RetentionPolicy.RUNTIME)
 @Documented
 @Conditional(OnMockModeCondition.class)

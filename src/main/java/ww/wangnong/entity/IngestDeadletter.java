@@ -15,6 +15,14 @@ import org.hibernate.annotations.CreationTimestamp;
 import lombok.Getter;
 import lombok.Setter;
 
+/**
+ * Purpose: 保存桥接层无法处理的死信消息。
+ * Responsibilities: 记录失败消息的主题、设备、原因和原始 payload，供后续人工排查或补偿。
+ * Flow: MqttBridge/ProtocolPersistenceService 捕获不可恢复异常 -> 写入 deadletter。
+ * Dependencies: ingest_deadletter 表。
+ * Input: 失败消息元数据与原始负载。
+ * Output: 死信审计记录。
+ */
 @Entity
 @Table(name = "ingest_deadletter", indexes = {
         @Index(name = "idx_ingest_deadletter_device_created", columnList = "device_id,created_at"),

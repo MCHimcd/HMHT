@@ -16,6 +16,15 @@ import org.hibernate.annotations.UpdateTimestamp;
 import lombok.Getter;
 import lombok.Setter;
 
+/**
+ * Purpose: 保存设备档案与在线心跳摘要。
+ * Responsibilities: 记录设备与节点映射、展示名、软硬件版本、厂商和最近在线状态，供节点状态判断使用。
+ * Flow: 桥接层接收硬件元信息或 telemetry -> 更新 profile -> NodeService 基于 online/lastSeenAt
+ * 聚合在线状态。
+ * Dependencies: device_profile 表、NodeService。
+ * Input: 设备档案元数据与在线心跳信息。
+ * Output: 设备档案快照。
+ */
 @Entity
 @Table(name = "device_profile", indexes = {
         @Index(name = "idx_device_profile_node", columnList = "node_id")

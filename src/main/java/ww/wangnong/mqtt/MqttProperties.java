@@ -2,6 +2,14 @@ package ww.wangnong.mqtt;
 
 import org.springframework.boot.context.properties.ConfigurationProperties;
 
+/**
+ * Purpose: 承载 MQTT 客户端的结构化配置。
+ * Responsibilities: 暴露启用开关、Broker 地址、认证信息、QoS、默认主题与连接参数。
+ * Flow: Spring 绑定 hmht.mqtt.* 配置 -> PahoMqttService 读取属性并创建客户端。
+ * Dependencies: @ConfigurationProperties、PahoMqttService。
+ * Input: application 配置与环境变量中的 MQTT 参数。
+ * Output: 可注入的 MQTT 配置对象。
+ */
 @ConfigurationProperties(prefix = "hmht.mqtt")
 public class MqttProperties {
 

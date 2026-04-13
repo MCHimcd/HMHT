@@ -29,9 +29,14 @@ import ww.wangnong.config.RunModeHolder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 
 /**
- * 全模式通用种子数据：确保 admin 用户、传感器类型、设备类型始终存在。
- * 在所有运行模式下都执行，使用 {@code existsBy*} 避免重复插入。
- * Order(0) 确保在 MockDataLifecycle 之前运行。
+ * Purpose: 在所有运行模式下补齐最小可运行基础数据。
+ * Responsibilities: 确保管理员账号、默认节点、传感器类型、设备类型以及关键静态绑定存在。
+ * Flow: 应用启动早期执行 -> 检查各类基础数据 -> 缺失时增量补齐 -> 供后续 MockDataLifecycle 与业务服务复用。
+ * Dependencies: User/Node/SensorType/EquipmentType
+ * 相关仓库、RunModeHolder、PasswordEncoder。
+ * Input: 当前数据库状态与运行模式。
+ * Output: 已补全的基础种子数据。
+ * Side Effects: 可能自动升级遗留管理员默认密码哈希，并创建默认节点及静态绑定。
  */
 @Component
 @Order(0)
@@ -115,7 +120,7 @@ class EssentialDataSeeder implements ApplicationRunner {
         var defaultNodes = java.util.List.of(
                 new ND("A03_Node_01", "温室节点 1"),
                 new ND("A03_Node_02", "温室节点 2"),
-                new ND("SIM_Node_01", "全模拟演示节点"));
+                new ND("SIM_Node_01", "温室节点 3"));
         boolean created = false;
         for (var nd : defaultNodes) {
             if (nodeRepo.findByNodeId(nd.nodeId()).isEmpty()) {

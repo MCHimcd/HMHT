@@ -11,19 +11,31 @@ import org.springframework.stereotype.Service;
 import ww.wangnong.config.condition.ConditionalOnMockMode;
 import ww.wangnong.service.SensorService;
 
+/**
+ * Purpose: 在 mock 模式下生成传感器历史和设备统计的演示数据。
+ * Responsibilities: 基于指标基准值生成平滑随机曲线，并返回最近 7 天设备统计。
+ * Flow: 控制器查询 -> 按 metric/range 计算采样点 -> 生成 summary 与 points -> 返回结果。
+ * Dependencies: SensorService、ConditionalOnMockMode。
+ * Input: nodeId、metric、range、equipmentKey。
+ * Output: 可视化友好的历史曲线与统计数据。
+ */
 @Service
 @ConditionalOnMockMode
 public class MockSensorService implements SensorService {
 
     private static final Random RNG = new Random();
 
-    private static final Map<String, double[]> BASE_VALUES = Map.of(
-            "temperature", new double[] { 25.0, 3.0 },
-            "humidity", new double[] { 60.0, 10.0 },
-            "light", new double[] { 10000.0, 2000.0 },
-            "co2", new double[] { 400.0, 50.0 },
-            "soilTemp", new double[] { 20.0, 2.0 },
-            "soilHumidity", new double[] { 40.0, 5.0 });
+    private static final Map<String, double[]> BASE_VALUES = Map.ofEntries(
+            Map.entry("temperature", new double[] { 25.0, 3.0 }),
+            Map.entry("humidity", new double[] { 60.0, 6.0 }),
+            Map.entry("light", new double[] { 900.0, 300.0 }),
+            Map.entry("co2", new double[] { 425.0, 15.0 }),
+            Map.entry("soilTemp", new double[] { 20.0, 3.0 }),
+            Map.entry("soilHumidity", new double[] { 70.0, 6.0 }),
+            Map.entry("soilPh", new double[] { 6.8, 0.3 }),
+            Map.entry("soilN", new double[] { 165.0, 40.0 }),
+            Map.entry("soilP", new double[] { 165.0, 40.0 }),
+            Map.entry("soilK", new double[] { 165.0, 40.0 }));
 
     @Override
     public SensorHistoryResult getSensorHistory(String nodeId, String metric, String range) {
@@ -75,10 +87,16 @@ public class MockSensorService implements SensorService {
 
     @Override
     public EquipmentStatsResult getEquipmentStats(String nodeId, String equipmentKey) {
-        Map<String, String> units = Map.of(
-                "water_valve", "开阀次数",
-                "water_pump", "灌溉量(升)",
-                "led_light", "补光时长(H)", "fan", "运行时长(H)", "camera", "识别次数");
+        Map<String, String> units = Map.ofEntries(
+                Map.entry("water_valve", "开阀次数"),
+                Map.entry("water_pump", "灌溶量(升)"),
+                Map.entry("led_light", "补光时长(H)"),
+                Map.entry("fan", "运行时长(H)"),
+                Map.entry("camera", "识别次数"),
+                Map.entry("fertigation_machine", "运行时长(H)"),
+                Map.entry("air_source_ac", "运行时长(H)"),
+                Map.entry("led_display", "显示时长(H)"),
+                Map.entry("electric_skylight", "开窗次数"));
         String unit = units.getOrDefault(equipmentKey, "值");
 
         List<StatsPoint> points = new ArrayList<>();
