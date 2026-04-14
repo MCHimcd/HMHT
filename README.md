@@ -63,7 +63,7 @@ HMHT/
 
 | 模式 | 说明 | 数据来源 |
 |------|------|----------|
-| **mock**（默认） | 仅 Java 服务，自动播种演示数据 | MockDataLifecycle 种子 + InfluxDB 30 天历史 |
+| **mock**（默认） | 仅 Java 服务，自动播种演示数据；SIM_Node_01 默认由前端本地生成遥测/告警/视频回退，后端模拟器保持空闲 | MockDataLifecycle 种子 + InfluxDB 30 天历史 |
 | **bridge** | App ↔ Java ↔ Python | Python agri → MQTT → MqttBridge → App |
 | **hardware** | App ↔ Java ↔ 硬件端 | 硬件 MQTT → MqttBridge → App |
 | **full** | App ↔ Java ↔ Python ↔ 硬件 | 双源 MQTT → MqttBridge → App |
@@ -74,6 +74,8 @@ HMHT/
 
 说明：`full` 模式下若同一 `deviceId` 同时存在 Python telemetry 与真实硬件 telemetry，桥接层会在首次收到真实硬件 telemetry 后优先采用硬件数据，并忽略后续同设备的 Python telemetry 覆盖。
 
+补充：mock 模式下 `hmht.mock.sim-node.frontend-driven=true` 为默认值，后端 `SimNodeSimulator` 仅保留 Bean 与命令主题兼容，不再主动生成 SIM_Node_01 遥测或告警；SIM_Node_01 的“高温/高 CO₂、低湿低光低土壤湿度、强光、低温、恢复正常”五类演示窗口改由 Wangnong 前端本地轮换，smart 模式下设备动作同样由前端智能模式决定。
+
 > **V2 阶段能力**：硬件 telemetry/command/ack 全链路打通；设备能力与影子查询；命令 ACK 超时重试闭环（5s 超时、3 次重试）；控制面持久化。协议规范见 [docs/backend-hardware-protocol.md](docs/backend-hardware-protocol.md)。
 
 ### 环境变量
@@ -82,6 +84,7 @@ HMHT/
 |------|--------|------|
 | `HMHT_RUN_MODE` | `mock` | 运行模式 |
 | `HMHT_MOCK_SEED_ENABLED` | `true` | mock 模式是否播种演示数据 |
+| `HMHT_MOCK_SIM_NODE_FRONTEND_DRIVEN` | `true` | 是否让 SIM_Node_01 由前端本地生成演示数据 |
 | `HMHT_AGRI_CHAT_URL` | `http://localhost:5000` | Python agri chat 服务地址 |
 | `HMHT_INFLUXDB_ENABLED` | `true` | 是否启用 InfluxDB |
 | `HMHT_INFLUXDB_TOKEN` | （空） | InfluxDB 访问令牌 |
@@ -127,13 +130,15 @@ powershell -ExecutionPolicy Bypass -File .\scripts\tests\start.ps1.test.ps1
 | 层次 | 注解 | 数量 |
 |------|------|------|
 | DTO / 异常 | `@Test` (纯 JUnit) | 3 |
-| 桥接与连接 | `@ExtendWith(MockitoExtension)` | 6 |
+| 桥接 / MQTT / Influx | `@ExtendWith(MockitoExtension)` | 11 |
 | Repository | `@DataJpaTest` (H2) | 11 |
-| Service | `@ExtendWith(MockitoExtension)` | 15 |
+| Service | `@ExtendWith(MockitoExtension)` | 6 |
 | Controller | `@WebMvcTest` | 12 |
-| 启动与基础 | `@SpringBootTest` | 2 |
+| Mock / Simulator | `@ExtendWith(MockitoExtension)` | 5 |
+| 启动与基础 | `@SpringBootTest` | 4 |
+| E2E | `@SpringBootTest` | 3 |
 
-共 **49 个测试类**。命名规则：`{method}_{scenario}_{expected}`；工厂：`TestDataFactory`；Spring Boot 4.x 使用 `@MockitoBean`。详见 `.github/instructions/java.instructions.md` 测试规范章节。
+共 **55 个测试类**。命名规则：`{method}_{scenario}_{expected}`；工厂：`TestDataFactory`；Spring Boot 4.x 使用 `@MockitoBean`。详见 `.github/instructions/java.instructions.md` 测试规范章节。
 
 ## REST API
 

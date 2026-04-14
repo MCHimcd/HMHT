@@ -10,6 +10,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
@@ -22,13 +23,14 @@ import ww.wangnong.repository.NodeRepository;
 
 /**
  * Purpose: 为 SIM_Node_01 生成完整的单节点模拟遥测与告警。
- * Responsibilities: 维护模拟环境/设备状态、响应 command、发布 telemetry、写入 Influx，并按阈值制造异常演示。
- * Flow: 启动时订阅节点 command -> 周期性波动环境并发布 telemetry -> 定时注入异常并触发告警检查。
+ * Responsibilities: 维护模拟环境/设备状态、响应 command、发布 1 秒 telemetry、写入
+ * Influx，并按脚本化窗口制造阈值越界演示。
+ * Flow: 启动时订阅节点 command -> 每秒生成带场景窗口的 telemetry -> 每秒执行阈值检查并发布告警。
  * Dependencies:
  * PahoMqttService、TelemetryAlertChecker、InfluxTelemetryWriter、NodeRepository、RunModeHolder。
  * Input: 节点 command、数据库中的节点存在性、随机数。
  * Output: SIM_Node_01 的 telemetry、告警与 Influx 时序数据。
- * Boundary: hardware 模式下强制禁用；节点若已从数据库删除会自动停机，避免幽灵节点继续发数据。
+ * Boundary: hardware 模式下强制禁用；节点若已从数据库删除会自动停机；smart 模式下设备控制由前端决定，不在这里内置自动控制。
  */
 @Component
 public class SimNodeSimulator {
@@ -43,6 +45,7 @@ public class SimNodeSimulator {
     private final TelemetryAlertChecker alertChecker;
     private final InfluxTelemetryWriter influxWriter;
     private final NodeRepository nodeRepo;
+    private final boolean frontendDriven;
 
     private final AtomicBoolean active = new AtomicBoolean(true);
 
@@ -50,20 +53,19 @@ public class SimNodeSimulator {
     private final ConcurrentHashMap<String, Boolean> equip = new ConcurrentHashMap<>();
     private int ledBrightness = 0;
     private String mode = "manual";
-    private int anomalyCycle = 0;
-
-    private static final String[] SPIKE_KEYS = { "temperature", "humidity", "co2" };
-    private static final double[] SPIKE_VALUES = { 33.0, 78.0, 480.0 };
+    private int telemetryTick = 0;
 
     public SimNodeSimulator(PahoMqttService mqttService,
             TelemetryAlertChecker alertChecker,
             InfluxTelemetryWriter influxWriter,
             NodeRepository nodeRepo,
-            RunModeHolder runModeHolder) {
+            RunModeHolder runModeHolder,
+            @Value("${hmht.mock.sim-node.frontend-driven:true}") boolean frontendDriven) {
         this.mqttService = mqttService;
         this.alertChecker = alertChecker;
         this.influxWriter = influxWriter;
         this.nodeRepo = nodeRepo;
+        this.frontendDriven = frontendDriven;
 
         // hardware 模式下不需要模拟节点
         if (runModeHolder.getMode() == ww.wangnong.config.RunMode.HARDWARE) {
@@ -101,7 +103,10 @@ public class SimNodeSimulator {
 
     @PostConstruct
     public void init() {
-        if (!active.get()) {
+        if (!active.get() || frontendDriven) {
+            if (frontendDriven) {
+                log.info("[SimNode] Frontend-driven mode enabled, backend simulator stays idle.");
+            }
             return;
         }
         mqttService.subscribe(COMMAND_TOPIC, msg -> {
@@ -126,18 +131,19 @@ public class SimNodeSimulator {
         return active.get();
     }
 
-    @Scheduled(fixedDelay = 3_000, initialDelay = 2_000)
+    @Scheduled(fixedDelay = 1_000, initialDelay = 1_000)
     public void publishTelemetry() {
-        if (!active.get() || !mqttService.isConnected())
+        if (!active.get() || frontendDriven || !mqttService.isConnected())
             return;
 
         // Reason: 低频检查数据库存在性，避免每轮 telemetry 都访问数据库，同时能在删除节点后及时停机。
-        if (anomalyCycle % 10 == 0 && nodeRepo.findByNodeId(NODE_ID).isEmpty()) {
+        if (telemetryTick % 10 == 0 && nodeRepo.findByNodeId(NODE_ID).isEmpty()) {
             log.info("[SimNode] Node {} no longer in DB, stopping simulator.", NODE_ID);
             shutdown();
             return;
         }
 
+        telemetryTick++;
         fluctuate("temperature", 0.3, 20.0, 30.0);
         fluctuate("humidity", 1.0, 50.0, 70.0);
         fluctuate("light", 50.0, 300.0, 1500.0);
@@ -148,12 +154,9 @@ public class SimNodeSimulator {
         fluctuate("soilN", 3.0, 80.0, 250.0);
         fluctuate("soilP", 3.0, 80.0, 250.0);
         fluctuate("soilK", 3.0, 80.0, 250.0);
+        applyDemoScenario(telemetryTick);
 
-        if ("smart".equals(mode)) {
-            double light = env.getOrDefault("light", 900.0);
-            ledBrightness = Math.max(0, Math.min(100, (int) ((1.0 - light / 1500.0) * 100)));
-            equip.put("led_light", ledBrightness > 0);
-        }
+        equip.put("led_light", ledBrightness > 0);
 
         Map<String, Object> data = new LinkedHashMap<>();
         Map<String, Object> equipData = new LinkedHashMap<>(equip);
@@ -177,21 +180,62 @@ public class SimNodeSimulator {
         }
     }
 
-    @Scheduled(fixedDelay = 30_000, initialDelay = 10_000)
+    @Scheduled(fixedDelay = 1_000, initialDelay = 1_500)
     public void checkThresholds() {
-        if (!active.get() || !mqttService.isConnected())
+        if (!active.get() || frontendDriven || !mqttService.isConnected())
             return;
 
-        anomalyCycle++;
-        if (anomalyCycle % 3 == 0) {
-            int idx = RNG.nextInt(SPIKE_KEYS.length);
-            String key = SPIKE_KEYS[idx];
-            double spike = SPIKE_VALUES[idx];
-            env.put(key, spike);
-            log.info("[SimNode] Anomaly injected: {}={}", key, spike);
+        alertChecker.checkAndAlertEnv(NODE_ID, env);
+    }
+
+    private void applyDemoScenario(int tick) {
+        int phase = tick % 20;
+
+        // Flow: 通过固定窗口轮换“高温/高 CO2、低湿低光低土壤湿度、强光、低温、恢复正常”五类场景，
+        // 既保证演示数据持续跨越默认阈值，也保证设备能够回到关闭状态。
+        if (phase >= 4 && phase <= 6) {
+            applyScenarioValue("temperature", 33.6, 0.2);
+            applyScenarioValue("co2", 540.0, 4.0);
+            applyScenarioValue("humidity", 58.0, 1.0);
+            applyScenarioValue("light", 880.0, 20.0);
+            applyScenarioValue("soilHumidity", 68.0, 1.0);
+            return;
+        }
+        if (phase >= 7 && phase <= 9) {
+            applyScenarioValue("humidity", 40.0, 1.0);
+            applyScenarioValue("soilHumidity", 48.0, 1.0);
+            applyScenarioValue("light", 160.0, 8.0);
+            applyScenarioValue("temperature", 25.0, 0.3);
+            applyScenarioValue("co2", 430.0, 3.0);
+            return;
+        }
+        if (phase >= 10 && phase <= 12) {
+            applyScenarioValue("light", 1750.0, 18.0);
+            applyScenarioValue("temperature", 27.0, 0.3);
+            applyScenarioValue("humidity", 60.0, 1.0);
+            applyScenarioValue("soilHumidity", 67.0, 1.0);
+            applyScenarioValue("co2", 435.0, 3.0);
+            return;
+        }
+        if (phase >= 13 && phase <= 15) {
+            applyScenarioValue("temperature", 16.5, 0.2);
+            applyScenarioValue("humidity", 62.0, 1.0);
+            applyScenarioValue("light", 520.0, 15.0);
+            applyScenarioValue("soilHumidity", 66.0, 1.0);
+            applyScenarioValue("co2", 420.0, 3.0);
+            return;
         }
 
-        alertChecker.checkAndAlertEnv(NODE_ID, env);
+        applyScenarioValue("temperature", 25.5, 0.3);
+        applyScenarioValue("humidity", 60.0, 1.0);
+        applyScenarioValue("light", 900.0, 20.0);
+        applyScenarioValue("soilHumidity", 68.0, 1.0);
+        applyScenarioValue("co2", 430.0, 3.0);
+    }
+
+    private void applyScenarioValue(String key, double center, double jitter) {
+        double next = center + ((RNG.nextDouble() * 2) - 1) * jitter;
+        env.put(key, Math.round(next * 10.0) / 10.0);
     }
 
     private void fluctuate(String key, double step, double min, double max) {
