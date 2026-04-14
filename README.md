@@ -1,295 +1,310 @@
-# HMHT — 鸿蒙慧田智慧系统（后端）
+# HMHT Backend
 
-> Spring Boot 后端服务，为鸿蒙慧田智慧农业 App（OpenHarmony）提供 REST API、MQTT 桥接和数据持久化。
+Spring Boot backend for the Wangnong smart agriculture system. HMHT provides REST APIs, MQTT bridge capabilities, persistence, and runtime modes for the OpenHarmony frontend, the `agri` Python subsystem, and hardware integrations.
 
-**目录**：[技术栈](#技术栈) · [项目结构](#项目结构) · [运行模式](#运行模式) · [构建与运行](#构建与运行) · [REST API](#rest-api) · [数据模型](#数据模型清单) · [服务清单](#服务清单) · [MQTT 协议](#mqtt-协议) · [设计约定](#设计约定)
+**Contents**: [Overview](#overview) · [Changelog](#changelog) · [Tech Stack](#tech-stack) · [Project Structure](#project-structure) · [Runtime Modes](#runtime-modes) · [Build Run Verification](#build-run-verification) · [API Surface](#api-surface) · [Data Model](#data-model) · [Services](#services) · [MQTT and Integration](#mqtt-and-integration) · [Security and Configuration](#security-and-configuration) · [Documentation](#documentation)
 
----
+## Overview
 
-## 技术栈
+HMHT is the backend service layer of the Wangnong platform. It supports:
 
-| 类别 | 技术 | 版本 |
-|------|------|------|
-| 语言 | Java | 21 |
-| 框架 | Spring Boot | 4.0.5 |
-| 构建 | Gradle (Wrapper) | — |
-| 关系数据库 | MySQL | 8.x |
-| 数据库迁移 | Flyway | — |
-| ORM | Spring Data JPA (Hibernate) | — |
-| 安全 | Spring Security + OAuth2 Resource Server | — |
+- REST APIs for authentication, node management, device control, alerts, scheduling, traceability, and administration
+- MQTT bridging between the app, Python `agri`, and hardware devices
+- relational persistence through Spring Data JPA and Flyway
+- optional InfluxDB-based telemetry storage
+- multiple runtime modes for mock, bridge, hardware, and full-chain operation
+
+The backend is designed to keep the application-facing API stable while allowing different data sources and routing strategies behind the same service contracts.
+
+## Changelog
+
+Project history from this task onward is tracked in [CHANGELOG.md](./CHANGELOG.md).
+
+## Tech Stack
+
+| Area | Technology | Version |
+|------|------------|---------|
+| Language | Java | 21 |
+| Framework | Spring Boot | 4.0.5 |
+| Build | Gradle Wrapper | — |
+| Relational DB | MySQL | 8.x |
+| Migration | Flyway | — |
+| ORM | Spring Data JPA / Hibernate | — |
+| Security | Spring Security + OAuth2 Resource Server | — |
 | MQTT | Eclipse Paho Client | 1.2.5 |
-| 时序数据库 | InfluxDB 3 (influxdb3-java) | 1.0.0 |
+| Time-series DB | InfluxDB 3 (`influxdb3-java`) | 1.0.0 |
 | CI/CD | GitHub Actions | — |
 
-## 项目结构
+## Project Structure
 
-```
+```text
 HMHT/
 ├── src/main/java/ww/wangnong/
-│   ├── HmhtApplication.java          # 启动类
-│   ├── web/                           # REST 控制器
-│   ├── service/                       # 业务逻辑接口
-│   │   └── impl/                      # 默认（数据库）实现
-│   ├── entity/                        # JPA 实体
-│   ├── dto/                           # 数据传输对象
-│   ├── repository/                    # Spring Data JPA 仓库
-│   ├── mqtt/                          # MQTT 客户端（Paho）
-│   ├── bridge/                        # MQTT/Python 桥接层
-│   ├── influx/                        # InfluxDB 写入
-│   ├── mock/                          # Mock 模式专属（模拟数据 & 种子）
-│   ├── config/                        # Spring 配置类
-│   │   └── condition/                 # 运行模式条件注解
-│   └── exception/                     # 全局异常处理
+│   ├── HmhtApplication.java
+│   ├── web/                    # REST controllers
+│   ├── service/                # Service interfaces
+│   │   └── impl/               # Default database-backed implementations
+│   ├── entity/                 # JPA entities
+│   ├── dto/                    # DTOs
+│   ├── repository/             # Spring Data repositories
+│   ├── mqtt/                   # MQTT client layer
+│   ├── bridge/                 # MQTT/Python/hardware bridge logic
+│   ├── influx/                 # InfluxDB integration
+│   ├── mock/                   # Mock data and simulators
+│   ├── config/                 # Spring configuration
+│   │   └── condition/          # Runtime mode condition annotations
+│   └── exception/              # Global exception handling
 ├── src/main/resources/
 │   ├── application.properties
-│   └── db/migration/                  # Flyway 迁移
-├── src/test/java/ww/wangnong/         # 测试（44 个测试类）
+│   └── db/migration/           # Flyway migrations
+├── src/test/java/ww/wangnong/  # test suites
 ├── scripts/
-│   ├── start.ps1                      # 一键启动脚本
-│   └── tests/                         # 脚本级测试
+│   ├── start.ps1
+│   └── tests/
 ├── docs/
-│   ├── api-endpoints.md               # REST API 端点详情
-│   ├── backend-hardware-protocol.md   # 后端↔硬件通讯协议（V2）
-│   ├── hardware-team-action-guide.md  # 硬件成员执行指南
-│   └── deployment.md                  # 云部署指南
+│   ├── api-endpoints.md
+│   ├── backend-hardware-protocol.md
+│   ├── hardware-team-action-guide.md
+│   └── deployment.md
 └── .github/
-    ├── copilot-instructions.md        # AI 编码指令（入口）
-    └── instructions/                  # 分领域编码规范
 ```
 
-## 运行模式
+## Runtime Modes
 
-通过 `hmht.run.mode`（环境变量 `HMHT_RUN_MODE`）切换：
+Switch modes with `hmht.run.mode` or `HMHT_RUN_MODE`.
 
-| 模式 | 说明 | 数据来源 |
-|------|------|----------|
-| **mock**（默认） | 仅 Java 服务，自动播种演示数据；SIM_Node_01 默认由前端本地生成遥测/告警/视频回退，后端模拟器保持空闲 | MockDataLifecycle 种子 + InfluxDB 30 天历史 |
-| **bridge** | App ↔ Java ↔ Python | Python agri → MQTT → MqttBridge → App |
-| **hardware** | App ↔ Java ↔ 硬件端 | 硬件 MQTT → MqttBridge → App |
-| **full** | App ↔ Java ↔ Python ↔ 硬件 | 双源 MQTT → MqttBridge → App |
+| Mode | Purpose | Data Path |
+|------|---------|-----------|
+| `mock` | Local demo mode with seeded data | mock lifecycle + InfluxDB demo history |
+| `bridge` | App to Java to Python chain | Python `agri` -> MQTT -> bridge -> app |
+| `hardware` | App to Java to hardware chain | hardware MQTT -> bridge -> app |
+| `full` | Full end-to-end routing | Python + hardware -> bridge -> app |
 
-组件通过 `config/condition/` 包中的 5 个自定义条件注解（`@ConditionalOnMockMode` / `@ConditionalOnBridgeMode` / `@ConditionalOnPythonRoute` / `@ConditionalOnHardwareRoute` / `@ConditionalOnNoPythonRoute`）按模式激活，详见 `.github/instructions/java.instructions.md`。
+Runtime wiring is controlled by custom condition annotations under `config/condition/`:
 
-启动时会确保默认管理员账号 `13800000001` 存在；若检测到历史版本遗留的明文默认密码 `admin123`，会自动升级为 BCrypt 哈希，不覆盖非默认密码。
+- `@ConditionalOnMockMode`
+- `@ConditionalOnBridgeMode`
+- `@ConditionalOnPythonRoute`
+- `@ConditionalOnHardwareRoute`
+- `@ConditionalOnNoPythonRoute`
 
-说明：`full` 模式下若同一 `deviceId` 同时存在 Python telemetry 与真实硬件 telemetry，桥接层会在首次收到真实硬件 telemetry 后优先采用硬件数据，并忽略后续同设备的 Python telemetry 覆盖。
+Operational notes:
 
-补充：mock 模式下 `hmht.mock.sim-node.frontend-driven=true` 为默认值，后端 `SimNodeSimulator` 仅保留 Bean 与命令主题兼容，不再主动生成 SIM_Node_01 遥测或告警；SIM_Node_01 的“高温/高 CO₂、低湿低光低土壤湿度、强光、低温、恢复正常”五类演示窗口改由 Wangnong 前端本地轮换，smart 模式下设备动作同样由前端智能模式决定。
+- A default admin account `13800000001` is ensured at startup.
+- If a legacy plaintext default password `admin123` is detected, it is upgraded to a BCrypt hash without overwriting a user-changed password.
+- In `full` mode, hardware telemetry takes precedence over Python telemetry for the same `deviceId` once real hardware data has been received.
+- In `mock` mode, `SIM_Node_01` demo telemetry, alerts, and video fallback are primarily generated on the Wangnong frontend when `HMHT_MOCK_SIM_NODE_FRONTEND_DRIVEN=true`.
 
-> **V2 阶段能力**：硬件 telemetry/command/ack 全链路打通；设备能力与影子查询；命令 ACK 超时重试闭环（5s 超时、3 次重试）；控制面持久化。协议规范见 [docs/backend-hardware-protocol.md](docs/backend-hardware-protocol.md)。
+### Environment Variables
 
-### 环境变量
+| Variable | Default | Purpose |
+|----------|---------|---------|
+| `HMHT_RUN_MODE` | `mock` | runtime mode |
+| `HMHT_MOCK_SEED_ENABLED` | `true` | enable mock seed data |
+| `HMHT_MOCK_SIM_NODE_FRONTEND_DRIVEN` | `true` | let the frontend drive `SIM_Node_01` demo data |
+| `HMHT_AGRI_CHAT_URL` | `http://localhost:5000` | Python chat service endpoint |
+| `HMHT_INFLUXDB_ENABLED` | `true` | enable InfluxDB writes |
+| `HMHT_INFLUXDB_TOKEN` | empty | InfluxDB access token |
+| `HMHT_COMMAND_RETRY_CHECK_INTERVAL_MS` | `5000` | ACK timeout scan interval |
+| `HMHT_COMMAND_RETRY_MAX_RETRIES` | `3` | maximum command retries |
+| `HMHT_COMMAND_RETRY_DEFAULT_TIMEOUT_MS` | `5000` | default command timeout |
 
-| 变量 | 默认值 | 说明 |
-|------|--------|------|
-| `HMHT_RUN_MODE` | `mock` | 运行模式 |
-| `HMHT_MOCK_SEED_ENABLED` | `true` | mock 模式是否播种演示数据 |
-| `HMHT_MOCK_SIM_NODE_FRONTEND_DRIVEN` | `true` | 是否让 SIM_Node_01 由前端本地生成演示数据 |
-| `HMHT_AGRI_CHAT_URL` | `http://localhost:5000` | Python agri chat 服务地址 |
-| `HMHT_INFLUXDB_ENABLED` | `true` | 是否启用 InfluxDB |
-| `HMHT_INFLUXDB_TOKEN` | （空） | InfluxDB 访问令牌 |
-| `HMHT_COMMAND_RETRY_CHECK_INTERVAL_MS` | `5000` | ACK 超时扫描周期（毫秒） |
-| `HMHT_COMMAND_RETRY_MAX_RETRIES` | `3` | 命令最大重试次数 |
-| `HMHT_COMMAND_RETRY_DEFAULT_TIMEOUT_MS` | `5000` | 默认命令超时 |
+By default, Hibernate SQL logging is disabled with `spring.jpa.show-sql=false`.
 
-默认关闭 Hibernate SQL 打印（`spring.jpa.show-sql=false`）；排查时可临时调高日志级别。
+## Build Run Verification
 
-## 构建与运行
+### Local Development
 
-### 本地开发（mock 模式）
+Mock mode:
 
 ```bash
 ./gradlew bootRun
 ```
 
-### 本地开发（全链路）
+Full-chain startup:
 
 ```powershell
 .\scripts\start.ps1 -Mode full
 ```
 
-支持参数：`-Mode mock|bridge|hardware|full`、`-PythonDir`、`-JavaDir`、`-AgriChatPort`、`-InfluxDir`、`-InfluxToken`。要求已安装 Windows Terminal（`wt.exe`）。
+The startup script supports `-Mode`, `-PythonDir`, `-JavaDir`, `-AgriChatPort`, `-InfluxDir`, and `-InfluxToken`. The Windows workflow requires `wt.exe`.
 
-启动后在主终端实时展示各服务状态，Ctrl+C 统一停机。当 InfluxDB 已存在 `_admin` token 且脚本未持有明文时，会提示通过 `-InfluxToken` 显式传入。
-
-### 启动脚本测试
+### Script-Level Verification
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File .\scripts\tests\start.ps1.test.ps1
 ```
 
-### 编译 & 测试
+### Compile and Test
 
 ```bash
-./gradlew clean bootJar   # 编译 → build/libs/HMHT-0.0.1-SNAPSHOT.jar
-./gradlew test             # 测试 → build/reports/tests/test/index.html
+./gradlew clean bootJar
+./gradlew test
 ```
 
-#### 测试概况
+Expected outputs:
 
-| 层次 | 注解 | 数量 |
-|------|------|------|
-| DTO / 异常 | `@Test` (纯 JUnit) | 3 |
-| 桥接 / MQTT / Influx | `@ExtendWith(MockitoExtension)` | 11 |
-| Repository | `@DataJpaTest` (H2) | 11 |
-| Service | `@ExtendWith(MockitoExtension)` | 6 |
+- JAR artifact: `build/libs/HMHT-0.0.1-SNAPSHOT.jar`
+- test report: `build/reports/tests/test/index.html`
+
+### Test Inventory
+
+| Layer | Test Style | Count |
+|------|------------|-------|
+| DTO / exception | pure JUnit `@Test` | 3 |
+| Bridge / MQTT / Influx | Mockito extension | 11 |
+| Repository | `@DataJpaTest` | 11 |
+| Service | Mockito extension | 6 |
 | Controller | `@WebMvcTest` | 12 |
-| Mock / Simulator | `@ExtendWith(MockitoExtension)` | 5 |
-| 启动与基础 | `@SpringBootTest` | 4 |
-| E2E | `@SpringBootTest` | 3 |
+| Mock / simulator | Mockito extension | 5 |
+| Bootstrap / foundation | `@SpringBootTest` | 4 |
+| End-to-end | `@SpringBootTest` | 3 |
 
-共 **55 个测试类**。命名规则：`{method}_{scenario}_{expected}`；工厂：`TestDataFactory`；Spring Boot 4.x 使用 `@MockitoBean`。详见 `.github/instructions/java.instructions.md` 测试规范章节。
+Total documented coverage: **55 test classes**.
 
-## REST API
+## API Surface
 
-基路径：`/api`（`server.servlet.context-path=/api`）
+Base path: `/api` through `server.servlet.context-path=/api`
 
-| Controller | 路径前缀 | 职责 | 端点数 |
-|------------|----------|------|--------|
-| `AuthController` | `/v1/auth` | 登录、注册、验证码、密码、资料、头像 | 10 |
-| `NodeController` | `/v1/nodes` | 节点列表、详情、元数据、阈值 | 5 |
-| `DeviceController` | `/v1/devices` | 设备能力快照、设备影子 | 2 |
-| `SensorController` | `/v1/sensors`, `/v1/equipment` | 传感器历史、设备统计 | 2 |
-| `AlertController` | `/v1/alerts` | 告警查询与处理 | 2 |
-| `ScheduledTaskController` | `/v1/tasks` | 定时任务 CRUD | 5 |
-| `ChatController` | `/v1/agri-qa` | AI 农业问答 | 1 |
-| `ExtraController` | `/v1/traceability`, `/v1/cameras` | 溯源扫码、摄像头 | 4 |
-| `AdminController` | `/v1/admin` | 节点管理、用户管理、权限 | 7 |
-| `OperationLogController` | `/v1/admin/logs` | 操作日志 | 1 |
-| `HealthController` | `/v1` | 前端可用性检查 | 1 |
-| `InfraController` | `/infra` | 健康检查、MQTT 手动发布 | 2 |
+| Controller | Route Prefix | Responsibility | Endpoints |
+|------------|--------------|----------------|-----------|
+| `AuthController` | `/v1/auth` | login, registration, verification, password, profile, avatar | 10 |
+| `NodeController` | `/v1/nodes` | node list, detail, metadata, thresholds | 5 |
+| `DeviceController` | `/v1/devices` | device capability snapshot and shadow | 2 |
+| `SensorController` | `/v1/sensors`, `/v1/equipment` | sensor history and equipment statistics | 2 |
+| `AlertController` | `/v1/alerts` | alert query and handling | 2 |
+| `ScheduledTaskController` | `/v1/tasks` | scheduled task CRUD | 5 |
+| `ChatController` | `/v1/agri-qa` | agriculture AI chat | 1 |
+| `ExtraController` | `/v1/traceability`, `/v1/cameras` | traceability scan and camera APIs | 4 |
+| `AdminController` | `/v1/admin` | node, user, and permission administration | 7 |
+| `OperationLogController` | `/v1/admin/logs` | operation log queries | 1 |
+| `HealthController` | `/v1` | frontend availability check | 1 |
+| `InfraController` | `/infra` | health and manual MQTT publish | 2 |
 
-逐接口详情见 [docs/api-endpoints.md](docs/api-endpoints.md)。
+Detailed endpoint documentation is maintained in [docs/api-endpoints.md](docs/api-endpoints.md).
 
-## 数据模型清单
+## Data Model
 
-所有实体位于 `ww.wangnong.entity`，使用 Lombok `@Getter @Setter`。
+All entities live under `ww.wangnong.entity` and use Lombok `@Getter @Setter`.
 
-### 基础业务表
+### Core Business Tables
 
-| 实体 | 表名 | 说明 |
-|------|------|------|
-| `User` | `users` | 用户（phone unique） |
-| `Node` | `nodes` | 农业节点 |
-| `SensorType` | `sensor_type` | 传感器类型定义 |
-| `NodeSensor` | `node_sensor` | 节点传感器绑定 + 阈值 |
-| `EquipmentType` | `equipment_type` | 设备类型定义 |
-| `NodeEquipment` | `node_equipment` | 节点设备绑定 |
-| `Alert` | `alerts` | 告警记录 |
-| `CommandLog` | `command_logs` | 命令日志 |
-| `ChatMessage` | `chat_messages` | 聊天消息 |
-| `ScheduledTask` | `scheduled_tasks` | 定时任务 |
-| `OperationLog` | `operation_logs` | 操作审计日志 |
-| `VerificationCode` | `verification_codes` | 验证码 |
-| `UserNodeAccess` | `user_node_access` | 用户-节点访问权限 |
+| Entity | Table | Purpose |
+|--------|-------|---------|
+| `User` | `users` | user accounts |
+| `Node` | `nodes` | agriculture nodes |
+| `SensorType` | `sensor_type` | sensor type definitions |
+| `NodeSensor` | `node_sensor` | node-sensor binding and thresholds |
+| `EquipmentType` | `equipment_type` | equipment type definitions |
+| `NodeEquipment` | `node_equipment` | node-equipment binding |
+| `Alert` | `alerts` | alert records |
+| `CommandLog` | `command_logs` | command logs |
+| `ChatMessage` | `chat_messages` | chat history |
+| `ScheduledTask` | `scheduled_tasks` | scheduled tasks |
+| `OperationLog` | `operation_logs` | audit logs |
+| `VerificationCode` | `verification_codes` | verification codes |
+| `UserNodeAccess` | `user_node_access` | user-node access control |
 
-### V2 控制面表
+### V2 Control Plane Tables
 
-| 实体 | 表名 | 说明 |
-|------|------|------|
-| `CommandRequest` | `command_request` | 命令闭环主表 |
-| `CommandAck` | `command_ack` | 命令回执流水 |
-| `CommandRetryLog` | `command_retry_log` | 超时重试轨迹 |
-| `DeviceProfile` | `device_profile` | 设备档案 |
-| `DeviceCapability` | `device_capability` | 设备能力快照 |
-| `CapabilitySensor` | `capability_sensor` | 传感器能力明细 |
-| `CapabilityEquipment` | `capability_equipment` | 设备能力明细 |
-| `DeviceShadow` | `device_shadow` | 设备状态影子 |
-| `IngestAudit` | `ingest_audit` | 消息接入审计 |
-| `IngestDeadletter` | `ingest_deadletter` | 消息死信队列 |
+| Entity | Table | Purpose |
+|--------|-------|---------|
+| `CommandRequest` | `command_request` | command lifecycle main table |
+| `CommandAck` | `command_ack` | command acknowledgement records |
+| `CommandRetryLog` | `command_retry_log` | retry tracking |
+| `DeviceProfile` | `device_profile` | device profile |
+| `DeviceCapability` | `device_capability` | capability snapshot |
+| `CapabilitySensor` | `capability_sensor` | sensor capability details |
+| `CapabilityEquipment` | `capability_equipment` | equipment capability details |
+| `DeviceShadow` | `device_shadow` | device shadow state |
+| `IngestAudit` | `ingest_audit` | message ingest audit |
+| `IngestDeadletter` | `ingest_deadletter` | dead-letter storage |
 
-## 服务清单
+## Services
 
-Service 接口（`ww.wangnong.service`）根据运行模式由不同实现提供：
+Service interfaces under `ww.wangnong.service` are backed by different implementations depending on runtime mode.
 
-| 接口 | 默认实现 | Mock/Bridge 实现 | 说明 |
-|------|----------|------------------|------|
-| `AuthService` | `DatabaseAuthService` | — | 认证 & 用户管理 |
-| `NodeService` | `DatabaseNodeService` | — | 节点元数据聚合 |
-| `AlertService` | `DatabaseAlertService` | — | 告警查询 & 处理 |
-| `SensorService` | — | `MockSensorService`(mock) / `InfluxSensorService`(bridge+) | 传感器历史 |
-| `DeviceService` | `DatabaseDeviceService` | — | 设备能力 & 影子 |
-| `ChatService` | — | `MockChatService`(mock) / `AgriChatService`(bridge+) | AI 对话 |
-| `ExtraService` | — | `MockExtraService`(mock) | 溯源 & 摄像头 |
-| `AdminService` | `DatabaseAdminService` | — | 管理员操作 |
-| `ScheduledTaskService` | `DatabaseScheduledTaskService` | — | 定时任务 |
-| `OperationLogService` | — | — | 操作日志（直接实现） |
+| Interface | Default Implementation | Mode-Specific Implementation | Purpose |
+|-----------|------------------------|------------------------------|---------|
+| `AuthService` | `DatabaseAuthService` | — | authentication and user management |
+| `NodeService` | `DatabaseNodeService` | — | node metadata aggregation |
+| `AlertService` | `DatabaseAlertService` | — | alert query and handling |
+| `SensorService` | — | `MockSensorService` in `mock`, `InfluxSensorService` in bridge-plus modes | sensor history |
+| `DeviceService` | `DatabaseDeviceService` | — | capability and shadow access |
+| `ChatService` | — | `MockChatService` in `mock`, `AgriChatService` in bridge-plus modes | AI chat |
+| `ExtraService` | — | `MockExtraService` in `mock` | traceability and camera data |
+| `AdminService` | `DatabaseAdminService` | — | administrative operations |
+| `ScheduledTaskService` | `DatabaseScheduledTaskService` | — | scheduled task management |
+| `OperationLogService` | direct implementation | — | operation logging |
 
-**补充组件**：`MockDataLifecycle`（种子数据）、`MockMqttSimulator` / `MockAlertGenerator` / `MockTaskExecutor`（mock 模拟）、`MockSensorService`（mock 传感器）、`MockExtraService`（mock 溯源/摄像头）、`MqttBridge`（桥接）、`TelemetryTranslator`（遥测翻译）、`InfluxTelemetryWriter`（InfluxDB 写入）、`ProtocolPersistenceService`（控制面持久化）、`CommandAckTracker`（ACK 重试）、`PahoMqttService`（MQTT 客户端）、`MqttSubscriptionRegistry`（订阅注册）。
+Supporting components include `MockDataLifecycle`, `MockMqttSimulator`, `MockAlertGenerator`, `MockTaskExecutor`, `TelemetryTranslator`, `InfluxTelemetryWriter`, `ProtocolPersistenceService`, `CommandAckTracker`, `PahoMqttService`, and `MqttSubscriptionRegistry`.
 
-## MQTT 协议
+## MQTT and Integration
 
-协议详情见 [docs/backend-hardware-protocol.md](docs/backend-hardware-protocol.md)，主题与桥接实现详见 `.github/instructions/mqtt.instructions.md`。
+Protocol details are documented in [docs/backend-hardware-protocol.md](docs/backend-hardware-protocol.md).
 
-桥接层实现说明：命令与 telemetry 使用独立处理通道；telemetry 按单独有序执行通道处理，避免旧状态在高负载下晚到覆盖新状态。
+### Hardware Topics
 
-### 硬件直连主题（V2）
+| Direction | Topic | Purpose |
+|-----------|-------|---------|
+| Device -> HMHT | `/hmht/device/{deviceId}/telemetry` | telemetry upload |
+| HMHT -> Device | `/hmht/device/{deviceId}/command` | control command |
+| Device -> HMHT | `/hmht/device/{deviceId}/ack` | command acknowledgement |
+| HMHT -> App | `/wangnong_2026/node/{nodeId}/ack` | acknowledgement forwarding |
 
-| 方向 | 主题 | 说明 |
-|------|------|------|
-| Device → HMHT | `/hmht/device/{deviceId}/telemetry` | 遥测上报 |
-| HMHT → Device | `/hmht/device/{deviceId}/command` | 控制命令 |
-| Device → HMHT | `/hmht/device/{deviceId}/ack` | 命令回执 |
-| HMHT → App | `/wangnong_2026/node/{nodeId}/ack` | 回执透传 |
+### Legacy `agri` Topics
 
-### 历史兼容主题（agri）
+| Direction | Topic | Purpose |
+|-----------|-------|---------|
+| Python -> HMHT | `/agri/device/{deviceId}/telemetry` | Python telemetry |
+| Python -> HMHT | `/agri/ai_vision/alert` | AI vision alert |
+| HMHT -> App | `/wangnong_2026/node/{nodeId}/telemetry` | translated telemetry |
+| HMHT -> App | `/wangnong_2026/node/{nodeId}/alert` | translated alert |
+| App -> Python | `.../command` -> `/agri/device/{deviceId}/command` | command forwarding |
 
-| 方向 | 主题 | 说明 |
-|------|------|------|
-| Python → HMHT | `/agri/device/{deviceId}/telemetry` | Python 遥测 |
-| Python → HMHT | `/agri/ai_vision/alert` | AI 视觉告警 |
-| HMHT → App | `/wangnong_2026/node/{nodeId}/telemetry` | 翻译后遥测 |
-| HMHT → App | `/wangnong_2026/node/{nodeId}/alert` | 翻译后告警 |
-| App → Python | `…/command` → `/agri/device/{deviceId}/command` | 命令转发 |
+### Bridge Behavior
 
-### 桥接逻辑概要
+- command handling and telemetry handling use separate processing paths
+- telemetry processing is ordered to avoid stale state overwriting fresh state
+- legacy `agri` topics remain compatible so app subscriptions stay unchanged
 
-`MqttBridge` 通过 `MqttSubscriptionRegistry` 绑定 7 个主题，实现：agri/硬件遥测翻译转发、App 命令双路转发、硬件 ACK 透传、AI 告警入库、capability 持久化、InfluxDB 写入、超时命令重试。保持历史 agri 主题兼容，App 侧无需修改订阅。
+### Collaboration with `agri`
 
-## 与 agri 项目的协作
+| Python Service | File | HMHT Interaction |
+|----------------|------|------------------|
+| backend main process | `backend_main_debug.py` | MQTT bridge |
+| web service | `web_server_debug.py` | HTTP proxy via `AgriChatService` |
+| mock device | `mock_device.py` | MQTT bridge |
 
-在 **bridge 模式**下：
+## Security and Configuration
 
-| Python 服务 | 文件 | HMHT 交互 |
-|-------------|------|-----------|
-| 后端主进程 | `backend_main_debug.py` | MQTT 桥接 |
-| Web 服务 | `web_server_debug.py` | HTTP 代理（AgriChatService） |
-| 模拟设备 | `mock_device.py` | MQTT 桥接 |
+- `SecurityConfig` currently permits all requests
+- CORS is open and CSRF is disabled
+- controllers extract `Authorization: Bearer {token}` and business validation happens in the service layer
+- structured configuration uses `@ConfigurationProperties`, including `MqttProperties` and `InfluxDbProperties`
+- sensitive values are expected through environment variables
 
-## 硬件团队对接
-
-- 协议规范：[docs/backend-hardware-protocol.md](docs/backend-hardware-protocol.md)
-- 执行清单：[docs/hardware-team-action-guide.md](docs/hardware-team-action-guide.md)
-
-## 数据库迁移
-
-- 迁移目录：`src/main/resources/db/migration/`
-- 当前版本：V2（协议控制面 10 张表）
-- 命名规范：`V{N}__{description}.sql`（双下划线）
-- DDL 策略：Flyway 创建基础表，Hibernate `update` 补充变更
-- 编写约定见 `.github/instructions/database.instructions.md`
-
-## 安全架构
-
-- **SecurityConfig**：当前所有请求放行（`permitAll()`）
-- CORS 全开放，CSRF 已禁用
-- Token：Controller 手动从 `Authorization: Bearer {token}` 提取，Service 层做业务校验
-
-## 部署
-
-详见 [docs/deployment.md](docs/deployment.md)。CI/CD：GitHub Actions → SSH → systemd；构建：`./gradlew clean bootJar -x test`；运行时：Eclipse Temurin JRE 21。
-
-## 设计约定
-
-### 统一响应格式
+### Response Contract
 
 ```json
-{ "code": 200, "message": "success", "data": ... }
+{ "code": 200, "message": "success", "data": {} }
 ```
 
-错误由 `BizException(code, message)` 抛出，`GlobalExceptionHandler` 捕获转为 `ApiResponse.error()`。
+Business errors are raised through `BizException(code, message)` and converted by `GlobalExceptionHandler` into `ApiResponse.error()`.
 
-### 配置管理
+### Database Migration
 
-- `@ConfigurationProperties` 用于结构化配置（`MqttProperties`、`InfluxDbProperties`）
-- 敏感配置通过环境变量注入
+- migration directory: `src/main/resources/db/migration/`
+- documented current control-plane version: V2
+- naming format: `V{N}__{description}.sql`
+- strategy: Flyway creates baseline schema and Hibernate `update` applies supplemental changes
+
+## Documentation
+
+| Document | Purpose |
+|----------|---------|
+| [CHANGELOG.md](./CHANGELOG.md) | ongoing project history |
+| [docs/api-endpoints.md](docs/api-endpoints.md) | detailed REST endpoints |
+| [docs/backend-hardware-protocol.md](docs/backend-hardware-protocol.md) | backend and hardware protocol |
+| [docs/hardware-team-action-guide.md](docs/hardware-team-action-guide.md) | hardware integration guide |
+| [docs/deployment.md](docs/deployment.md) | deployment workflow |
