@@ -11,7 +11,7 @@ import ww.wangnong.entity.NodeSensor;
 /**
  * Purpose: 提供节点传感器绑定与阈值配置查询。
  * Responsibilities: 按 nodeId 或 nodeId+sensorKey 读取绑定，并支持节点级批量清理。
- * Flow: NodeService 更新阈值；MockDataLifecycle 或节点删除流程写入/删除。
+ * Flow: NodeService 更新阈值；课程版种子或节点删除流程写入/删除。
  * Dependencies: NodeSensor 实体。
  * Output: 节点传感器绑定列表或单条绑定。
  */

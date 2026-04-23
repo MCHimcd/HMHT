@@ -1,5 +1,5 @@
 ---
-description: "Java 编码规范 - Spring Boot 模式、测试规范、API 约定"
+description: "Java 编码规范 - 课程版 Spring Boot、测试规范、API 约定"
 applyTo: "src/**/*.java"
 ---
 
@@ -26,25 +26,14 @@ public interface XxxService {
     XxxResult doSomething(String token, String param);
 }
 
-// 实现（使用条件注解）
+// 实现
 @Service
-@ConditionalOnMockMode  // 或 @ConditionalOnBridgeMode 等
-public class MockXxxService implements XxxService {
+public class DatabaseXxxService implements XxxService {
     // ...
 }
 ```
 
-### 运行模式条件注解
-
-| 注解 | 激活模式 |
-|------|----------|
-| `@ConditionalOnMockMode` | mock |
-| `@ConditionalOnBridgeMode` | bridge/hardware/full |
-| `@ConditionalOnPythonRoute` | bridge/full |
-| `@ConditionalOnHardwareRoute` | hardware/full |
-| `@ConditionalOnNoPythonRoute` | mock/hardware |
-
-注解定义在 `config/condition/` 包。**不要使用旧的 SpEL 表达式**。
+课程版只有一种运行形态，不添加条件装配注解或运行模式分支。
 
 ## Lombok 约定
 

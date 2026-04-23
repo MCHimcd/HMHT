@@ -17,7 +17,7 @@ import lombok.Setter;
 /**
  * Purpose: 持久化节点告警记录。
  * Responsibilities: 保存告警标识、来源、严重级别、处理状态和发生/处理时间，供告警列表与处理流程使用。
- * Flow: AlertService/MqttBridge 创建并写入 -> Controller 查询 -> 告警处理后更新 handled 字段。
+ * Flow: AlertService 创建并写入 -> Controller 查询 -> 告警处理后更新 handled 字段。
  * Dependencies: alerts 表、AlertService。
  * Input: 告警主题翻译结果或系统生成的告警信息。
  * Output: 告警历史与待处理队列数据。

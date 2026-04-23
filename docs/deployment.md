@@ -63,13 +63,13 @@ sudo systemctl reload sshd
 
 ---
 
-### 步骤 3：安装 Java 21
+### 步骤 3：安装 Java 25
 
 ```bash
 sudo apt update
-sudo apt install -y openjdk-21-jdk
+sudo apt install -y openjdk-25-jdk
 java -version
-# 预期输出：openjdk version "21.x.x" ...
+# 预期输出：openjdk version "25.x.x" ...
 ```
 
 ---
@@ -206,7 +206,7 @@ ssh-keyscan -p <SERVER_PORT> <SERVER_HOST>
 | 配置项 | 位置（关键字） | 说明 |
 |---|---|---|
 | 触发分支 | `branches: - master` | 改为 `main`、`release` 等 |
-| JDK 版本 | `java-version: '21'` | 按项目实际 Java 版本修改 |
+| JDK 版本 | `java-version: '25'` | 按项目实际 Java 版本修改 |
 | 构建命令 | `./gradlew clean bootJar -x test` | 去掉 `-x test` 可启用测试（构建时间会增加，测试失败会阻断部署） |
 | 服务器 jar 文件名 | `${{ secrets.APP_DIR }}/app.jar` | 修改后需同步 systemd `ExecStart` |
 

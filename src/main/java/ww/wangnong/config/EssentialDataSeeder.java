@@ -1,6 +1,8 @@
 package ww.wangnong.config;
 
 import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.util.List;
 import java.util.Optional;
 
 import org.slf4j.Logger;
@@ -8,39 +10,46 @@ import org.slf4j.LoggerFactory;
 import org.springframework.boot.ApplicationArguments;
 import org.springframework.boot.ApplicationRunner;
 import org.springframework.core.annotation.Order;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Component;
 
+import ww.wangnong.entity.Alert;
 import ww.wangnong.entity.EquipmentType;
 import ww.wangnong.entity.Node;
 import ww.wangnong.entity.NodeEquipment;
 import ww.wangnong.entity.NodeSensor;
+import ww.wangnong.entity.OperationLog;
+import ww.wangnong.entity.ScheduledTask;
 import ww.wangnong.entity.SensorType;
 import ww.wangnong.entity.User;
+import ww.wangnong.entity.UserNodeAccess;
+import ww.wangnong.repository.AlertRepository;
 import ww.wangnong.repository.EquipmentTypeRepository;
 import ww.wangnong.repository.NodeEquipmentRepository;
 import ww.wangnong.repository.NodeRepository;
 import ww.wangnong.repository.NodeSensorRepository;
+import ww.wangnong.repository.OperationLogRepository;
+import ww.wangnong.repository.ScheduledTaskRepository;
 import ww.wangnong.repository.SensorTypeRepository;
+import ww.wangnong.repository.UserNodeAccessRepository;
 import ww.wangnong.repository.UserRepository;
 
-import ww.wangnong.config.RunMode;
-import ww.wangnong.config.RunModeHolder;
-
-import org.springframework.security.crypto.password.PasswordEncoder;
-
 /**
- * Purpose: 在所有运行模式下补齐最小可运行基础数据。
- * Responsibilities: 确保管理员账号、默认节点、传感器类型、设备类型以及关键静态绑定存在。
- * Flow: 应用启动早期执行 -> 检查各类基础数据 -> 缺失时增量补齐 -> 供后续 MockDataLifecycle 与业务服务复用。
- * Dependencies: User/Node/SensorType/EquipmentType
- * 相关仓库、RunModeHolder、PasswordEncoder。
- * Input: 当前数据库状态与运行模式。
- * Output: 已补全的基础种子数据。
- * Side Effects: 可能自动升级遗留管理员默认密码哈希，并创建默认节点及静态绑定。
+ * Purpose: 为课程版应用补齐固定演示数据。
+ * Responsibilities: 确保默认用户、单个模拟节点、固定传感器/设备字典、节点绑定、告警、任务和操作日志存在。
+ * Flow: 应用启动 -> 逐项幂等检查 -> 缺失时写入最小演示数据。
+ * Dependencies: 课程版核心实体仓库、PasswordEncoder。
+ * Input: 当前 MySQL 数据库状态。
+ * Output: 可直接演示的课程版基础数据。
+ * Side Effects: 首次启动时写入演示数据；后续启动只补齐缺失项。
  */
 @Component
 @Order(0)
 class EssentialDataSeeder implements ApplicationRunner {
+
+    static final String DEMO_NODE_ID = "SIM_Node_01";
+    static final String DEMO_USER_PHONE = "13800000000";
+    static final String ADMIN_PHONE = "13800000001";
 
     private static final Logger log = LoggerFactory.getLogger(EssentialDataSeeder.class);
 
@@ -50,7 +59,10 @@ class EssentialDataSeeder implements ApplicationRunner {
     private final EquipmentTypeRepository equipmentTypeRepo;
     private final NodeSensorRepository nodeSensorRepo;
     private final NodeEquipmentRepository nodeEquipmentRepo;
-    private final RunModeHolder runModeHolder;
+    private final UserNodeAccessRepository userNodeAccessRepo;
+    private final AlertRepository alertRepo;
+    private final ScheduledTaskRepository taskRepo;
+    private final OperationLogRepository operationLogRepo;
     private final PasswordEncoder passwordEncoder;
 
     EssentialDataSeeder(UserRepository userRepo,
@@ -59,7 +71,10 @@ class EssentialDataSeeder implements ApplicationRunner {
             EquipmentTypeRepository equipmentTypeRepo,
             NodeSensorRepository nodeSensorRepo,
             NodeEquipmentRepository nodeEquipmentRepo,
-            RunModeHolder runModeHolder,
+            UserNodeAccessRepository userNodeAccessRepo,
+            AlertRepository alertRepo,
+            ScheduledTaskRepository taskRepo,
+            OperationLogRepository operationLogRepo,
             PasswordEncoder passwordEncoder) {
         this.userRepo = userRepo;
         this.nodeRepo = nodeRepo;
@@ -67,212 +82,184 @@ class EssentialDataSeeder implements ApplicationRunner {
         this.equipmentTypeRepo = equipmentTypeRepo;
         this.nodeSensorRepo = nodeSensorRepo;
         this.nodeEquipmentRepo = nodeEquipmentRepo;
-        this.runModeHolder = runModeHolder;
+        this.userNodeAccessRepo = userNodeAccessRepo;
+        this.alertRepo = alertRepo;
+        this.taskRepo = taskRepo;
+        this.operationLogRepo = operationLogRepo;
         this.passwordEncoder = passwordEncoder;
     }
 
     @Override
     public void run(ApplicationArguments args) {
-        boolean changed = false;
-        changed |= ensureAdmin();
-        changed |= ensureNodes();
-        changed |= ensureSensorTypes();
-        changed |= ensureEquipmentTypes();
-        changed |= ensureSimNodeSensors();
-        changed |= ensureSimNodeEquipment();
-        changed |= ensureA03NodeEquipment();
-        if (changed) {
-            log.info("[EssentialData] 基础种子数据已补全。");
-        }
+        User admin = ensureUser(ADMIN_PHONE, "管理员", "admin", "admin123");
+        User demoUser = ensureUser(DEMO_USER_PHONE, "农场主", "user", "123456");
+        ensureSingleDemoNode(demoUser);
+        ensureSensorTypes();
+        ensureEquipmentTypes();
+        ensureNodeSensors();
+        ensureNodeEquipment();
+        ensureDemoUserAccess(demoUser);
+        ensureAlerts();
+        ensureScheduledTask(demoUser);
+        ensureOperationLog(admin);
+        log.info("[CourseData] 课程版固定演示数据已检查完成。");
     }
 
-    private boolean ensureAdmin() {
-        Optional<User> existingAdmin = userRepo.findByPhone("13800000001");
-        if (existingAdmin.isPresent()) {
-            User admin = existingAdmin.get();
-            if (!requiresLegacyDefaultPasswordUpgrade(admin)) {
-                return false;
+    private User ensureUser(String phone, String userName, String role, String password) {
+        Optional<User> existing = userRepo.findByPhone(phone);
+        if (existing.isPresent()) {
+            User user = existing.get();
+            if (password.equals(user.getPasswordHash())) {
+                user.setPasswordHash(passwordEncoder.encode(password));
+                userRepo.save(user);
             }
-            admin.setPasswordHash(passwordEncoder.encode("admin123"));
-            userRepo.save(admin);
-            log.info("[EssentialData] 已自动升级管理员默认密码为 BCrypt 哈希。");
-            return true;
+            return user;
         }
-        User admin = new User();
-        admin.setPhone("13800000001");
-        admin.setPasswordHash(passwordEncoder.encode("admin123"));
-        admin.setUserName("管理员");
-        admin.setGender("男");
-        admin.setBirthDate(LocalDate.of(1985, 6, 15));
-        admin.setRole("admin");
-        userRepo.save(admin);
-        log.info("[EssentialData] 已创建管理员用户 (13800000001)。");
-        return true;
+
+        User user = new User();
+        user.setPhone(phone);
+        user.setPasswordHash(passwordEncoder.encode(password));
+        user.setUserName(userName);
+        user.setGender("男");
+        user.setBirthDate(LocalDate.of(1990, 1, 1));
+        user.setRole(role);
+        return userRepo.save(user);
     }
 
-    private boolean requiresLegacyDefaultPasswordUpgrade(User admin) {
-        return "admin123".equals(admin.getPasswordHash());
+    private void ensureSingleDemoNode(User owner) {
+        Node node = nodeRepo.findByNodeId(DEMO_NODE_ID).orElseGet(Node::new);
+        node.setNodeId(DEMO_NODE_ID);
+        node.setNodeName("课程模拟温室节点");
+        node.setUser(owner);
+        node.setOnline(true);
+        node.setSmartMode(false);
+        nodeRepo.save(node);
     }
 
-    private boolean ensureNodes() {
-        record ND(String nodeId, String name) {
-        }
-        var defaultNodes = java.util.List.of(
-                new ND("A03_Node_01", "温室节点 1"),
-                new ND("A03_Node_02", "温室节点 2"),
-                new ND("SIM_Node_01", "温室节点 3"));
-        boolean created = false;
-        for (var nd : defaultNodes) {
-            if (nodeRepo.findByNodeId(nd.nodeId()).isEmpty()) {
-                Node node = new Node();
-                node.setNodeId(nd.nodeId());
-                node.setNodeName(nd.name());
-                node.setOnline(false);
-                node.setSmartMode(false);
-                nodeRepo.save(node);
-                created = true;
-            }
-        }
-        if (created) {
-            log.info("[EssentialData] 已创建默认节点。");
-        }
-        return created;
-    }
-
-    private boolean ensureSensorTypes() {
-        if (sensorTypeRepo.count() > 0) {
-            return false;
-        }
+    private void ensureSensorTypes() {
         record ST(String key, String name, String unit, String icon, String badgeColor, String bgColor) {
         }
-        var types = java.util.List.of(
-                new ST("temperature", "空气温度", "℃", "🌡️", "#FF7043", "#FFF3E0"),
-                new ST("humidity", "空气湿度", "%", "💧", "#42A5F5", "#E3F2FD"),
-                new ST("co2", "CO₂浓度", "ppm", "🫧", "#78909C", "#ECEFF1"),
-                new ST("light", "光照强度", "Lux", "☀️", "#FDD835", "#FFFDE7"),
-                new ST("soilTemp", "土壤温度", "℃", "🌱", "#8D6E63", "#EFEBE9"),
-                new ST("soilHumidity", "土壤湿度", "%", "🪴", "#66BB6A", "#E8F5E9"));
-        for (var s : types) {
-            SensorType t = new SensorType();
-            t.setSensorKey(s.key());
-            t.setName(s.name());
-            t.setUnit(s.unit());
-            t.setIcon(s.icon());
-            t.setBadgeColor(s.badgeColor());
-            t.setBgColor(s.bgColor());
-            sensorTypeRepo.save(t);
+        List<ST> types = List.of(
+                new ST("temperature", "空气温度", "C", "temp", "#FF7043", "#FFF3E0"),
+                new ST("humidity", "空气湿度", "%", "humidity", "#42A5F5", "#E3F2FD"),
+                new ST("light", "光照强度", "Lux", "light", "#FDD835", "#FFFDE7"),
+                new ST("soilHumidity", "土壤湿度", "%", "soil", "#66BB6A", "#E8F5E9"));
+        for (ST s : types) {
+            SensorType type = sensorTypeRepo.findBySensorKey(s.key()).orElseGet(SensorType::new);
+            type.setSensorKey(s.key());
+            type.setName(s.name());
+            type.setUnit(s.unit());
+            type.setIcon(s.icon());
+            type.setBadgeColor(s.badgeColor());
+            type.setBgColor(s.bgColor());
+            sensorTypeRepo.save(type);
         }
-        log.info("[EssentialData] 已创建 {} 种传感器类型。", types.size());
-        return true;
     }
 
-    private boolean ensureEquipmentTypes() {
-        record ET(String key, String name, String icon, boolean ctrl, String controlType) {
+    private void ensureEquipmentTypes() {
+        record ET(String key, String name, String icon, boolean controllable, String controlType) {
         }
-        var types = java.util.List.of(
-                new ET("water_valve", "水阀", "🚿", true, "toggle"),
-                new ET("water_pump", "水泵", "💦", true, "toggle"),
-                new ET("led_light", "补光灯", "💡", true, "slider"),
-                new ET("fan", "排风扇", "🌀", true, "toggle"),
-                new ET("camera", "摄像头", "📷", false, "toggle"));
-        boolean changed = false;
-        for (var e : types) {
-            EquipmentType t = equipmentTypeRepo.findByEquipmentKey(e.key()).orElseGet(EquipmentType::new);
-            boolean created = t.getId() == null;
-            boolean dirty = created;
-            if (!java.util.Objects.equals(t.getName(), e.name())) {
-                t.setName(e.name());
-                dirty = true;
-            }
-            if (!java.util.Objects.equals(t.getIcon(), e.icon())) {
-                t.setIcon(e.icon());
-                dirty = true;
-            }
-            if (!java.util.Objects.equals(t.getControllable(), e.ctrl())) {
-                t.setControllable(e.ctrl());
-                dirty = true;
-            }
-            if (!java.util.Objects.equals(t.getControlType(), e.controlType())) {
-                t.setControlType(e.controlType());
-                dirty = true;
-            }
-            t.setEquipmentKey(e.key());
-            if (dirty) {
-                equipmentTypeRepo.save(t);
-                changed = true;
-            }
+        List<ET> types = List.of(
+                new ET("water_pump", "水泵", "pump", true, "toggle"),
+                new ET("led_light", "补光灯", "light", true, "slider"),
+                new ET("fan", "排风扇", "fan", true, "toggle"));
+        for (ET e : types) {
+            EquipmentType type = equipmentTypeRepo.findByEquipmentKey(e.key()).orElseGet(EquipmentType::new);
+            type.setEquipmentKey(e.key());
+            type.setName(e.name());
+            type.setIcon(e.icon());
+            type.setControllable(e.controllable());
+            type.setControlType(e.controlType());
+            equipmentTypeRepo.save(type);
         }
-        if (changed) {
-            log.info("[EssentialData] 设备类型定义已补全/回填。", types.size());
-        }
-        return changed;
     }
 
-    /**
-     * 确保 SIM_Node_01 拥有 node_sensor 记录（含阈值），使 TelemetryAlertChecker 可触发告警。
-     */
-    private boolean ensureSimNodeSensors() {
-        String nodeId = "SIM_Node_01";
-        if (!nodeSensorRepo.findByNodeId(nodeId).isEmpty()) {
-            return false;
+    private void ensureNodeSensors() {
+        record NS(String key, Double warningMin, Double warningMax) {
         }
-        record NS(String key, Double warnMin, Double warnMax) {
-        }
-        var sensors = java.util.List.of(
-                new NS("temperature", 10.0, 35.0),
+        List<NS> sensors = List.of(
+                new NS("temperature", 15.0, 35.0),
                 new NS("humidity", 30.0, 85.0),
-                new NS("co2", 300.0, 1500.0),
-                new NS("light", 1000.0, 50000.0),
-                new NS("soilTemp", 5.0, 35.0),
+                new NS("light", 100.0, 50000.0),
                 new NS("soilHumidity", 20.0, 80.0));
-        for (var s : sensors) {
-            NodeSensor ns = new NodeSensor();
-            ns.setNodeId(nodeId);
-            ns.setSensorKey(s.key());
-            ns.setWarningMin(s.warnMin());
-            ns.setWarningMax(s.warnMax());
-            nodeSensorRepo.save(ns);
+        for (NS s : sensors) {
+            NodeSensor nodeSensor = nodeSensorRepo.findByNodeIdAndSensorKey(DEMO_NODE_ID, s.key()).orElseGet(NodeSensor::new);
+            nodeSensor.setNodeId(DEMO_NODE_ID);
+            nodeSensor.setSensorKey(s.key());
+            nodeSensor.setWarningMin(s.warningMin());
+            nodeSensor.setWarningMax(s.warningMax());
+            nodeSensorRepo.save(nodeSensor);
         }
-        log.info("[EssentialData] 已创建 SIM_Node_01 的 {} 个传感器阈值。", sensors.size());
-        return true;
     }
 
-    private boolean ensureA03NodeEquipment() {
-        var keys = java.util.List.of("water_valve", "water_pump", "led_light", "fan", "camera");
-        boolean changed = false;
-        changed |= ensureNodeEquipmentKeys("A03_Node_01", keys);
-        changed |= ensureNodeEquipmentKeys("A03_Node_02", keys);
-        return changed;
-    }
-
-    private boolean ensureSimNodeEquipment() {
-        String nodeId = "SIM_Node_01";
-        var keys = java.util.List.of("water_valve", "water_pump", "led_light", "fan", "camera");
-        return ensureNodeEquipmentKeys(nodeId, keys);
-    }
-
-    /**
-     * 确保指定节点拥有给定设备 key 的 NodeEquipment 记录，缺失则补建。
-     */
-    private boolean ensureNodeEquipmentKeys(String nodeId, java.util.List<String> keys) {
-        var existing = nodeEquipmentRepo.findByNodeId(nodeId);
-        var existingKeys = new java.util.HashSet<String>();
-        for (var ne : existing) {
-            existingKeys.add(ne.getEquipmentKey());
-        }
-        int added = 0;
-        for (var key : keys) {
-            if (!existingKeys.contains(key)) {
-                NodeEquipment ne = new NodeEquipment();
-                ne.setNodeId(nodeId);
-                ne.setEquipmentKey(key);
-                nodeEquipmentRepo.save(ne);
-                added++;
+    private void ensureNodeEquipment() {
+        for (String key : List.of("water_pump", "led_light", "fan")) {
+            boolean exists = nodeEquipmentRepo.findByNodeId(DEMO_NODE_ID).stream()
+                    .anyMatch(item -> key.equals(item.getEquipmentKey()));
+            if (!exists) {
+                NodeEquipment equipment = new NodeEquipment();
+                equipment.setNodeId(DEMO_NODE_ID);
+                equipment.setEquipmentKey(key);
+                nodeEquipmentRepo.save(equipment);
             }
         }
-        if (added > 0) {
-            log.info("[EssentialData] 已为 {} 补建 {} 个设备关联。", nodeId, added);
+    }
+
+    private void ensureDemoUserAccess(User demoUser) {
+        if (!userNodeAccessRepo.existsByUserIdAndNodeId(demoUser.getId(), DEMO_NODE_ID)) {
+            UserNodeAccess access = new UserNodeAccess();
+            access.setUserId(demoUser.getId());
+            access.setNodeId(DEMO_NODE_ID);
+            userNodeAccessRepo.save(access);
         }
-        return added > 0;
+    }
+
+    private void ensureAlerts() {
+        if (alertRepo.findByAlertId("COURSE_ALERT_1").isPresent()) {
+            return;
+        }
+        Alert alert = new Alert();
+        alert.setAlertId("COURSE_ALERT_1");
+        alert.setNodeId(DEMO_NODE_ID);
+        alert.setType("temperature");
+        alert.setTypeName("空气温度");
+        alert.setLevel("warning");
+        alert.setMessage("模拟温室空气温度偏高，请检查通风设备。");
+        alert.setSource("system");
+        alert.setSourceName("课程版演示数据");
+        alert.setIsHandled(false);
+        alert.setAlertTime(LocalDateTime.now().minusMinutes(20));
+        alertRepo.save(alert);
+    }
+
+    private void ensureScheduledTask(User demoUser) {
+        if (!taskRepo.findByUserIdOrderByCreatedAtDesc(demoUser.getId()).isEmpty()) {
+            return;
+        }
+        ScheduledTask task = new ScheduledTask();
+        task.setNodeId(DEMO_NODE_ID);
+        task.setUserId(demoUser.getId());
+        task.setEquipmentKey("water_pump");
+        task.setAction("turn_on");
+        task.setTaskName("每日灌溉");
+        task.setHour(8);
+        task.setMinute(30);
+        task.setRepeatDays("1,2,3,4,5,6,7");
+        task.setEnabled(true);
+        taskRepo.save(task);
+    }
+
+    private void ensureOperationLog(User admin) {
+        if (operationLogRepo.count() > 0) {
+            return;
+        }
+        OperationLog logItem = new OperationLog();
+        logItem.setUserId(admin.getId());
+        logItem.setUserName(admin.getUserName());
+        logItem.setOperationType("SYSTEM_SEED");
+        logItem.setTargetType("course_data");
+        logItem.setTargetId(DEMO_NODE_ID);
+        logItem.setDetail("初始化课程版演示数据");
+        operationLogRepo.save(logItem);
     }
 }

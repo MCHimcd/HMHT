@@ -2,7 +2,7 @@ package ww.wangnong.service.impl;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
-import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import java.util.List;
@@ -21,15 +21,7 @@ import ww.wangnong.entity.NodeSensor;
 import ww.wangnong.entity.SensorType;
 import ww.wangnong.entity.User;
 import ww.wangnong.entity.UserNodeAccess;
-import ww.wangnong.entity.CapabilitySensor;
-import ww.wangnong.entity.CapabilityEquipment;
-import ww.wangnong.entity.DeviceCapability;
-import ww.wangnong.entity.DeviceProfile;
 import ww.wangnong.exception.BizException;
-import ww.wangnong.repository.CapabilityEquipmentRepository;
-import ww.wangnong.repository.CapabilitySensorRepository;
-import ww.wangnong.repository.DeviceCapabilityRepository;
-import ww.wangnong.repository.DeviceProfileRepository;
 import ww.wangnong.repository.EquipmentTypeRepository;
 import ww.wangnong.repository.NodeEquipmentRepository;
 import ww.wangnong.repository.NodeRepository;
@@ -41,6 +33,7 @@ import ww.wangnong.service.NodeService.EquipmentMetaInfo;
 import ww.wangnong.service.NodeService.NodeDetail;
 import ww.wangnong.service.NodeService.NodeInfo;
 import ww.wangnong.service.NodeService.SensorMetaInfo;
+import ww.wangnong.service.NodeService.ThresholdUpdate;
 import ww.wangnong.service.OperationLogService;
 
 @ExtendWith(MockitoExtension.class)
@@ -61,14 +54,6 @@ class DatabaseNodeServiceTest {
     @Mock
     private UserNodeAccessRepository userNodeAccessRepo;
     @Mock
-    private DeviceCapabilityRepository deviceCapabilityRepository;
-    @Mock
-    private CapabilitySensorRepository capabilitySensorRepository;
-    @Mock
-    private CapabilityEquipmentRepository capabilityEquipmentRepository;
-    @Mock
-    private DeviceProfileRepository deviceProfileRepository;
-    @Mock
     private OperationLogService opLog;
 
     private DatabaseNodeService service;
@@ -76,340 +61,145 @@ class DatabaseNodeServiceTest {
     @BeforeEach
     void setUp() {
         service = new DatabaseNodeService(authService, nodeRepo, sensorTypeRepo,
-                nodeSensorRepo, equipmentTypeRepo, nodeEquipmentRepo,
-                userNodeAccessRepo,
-                deviceCapabilityRepository,
-                capabilitySensorRepository,
-                capabilityEquipmentRepository,
-                deviceProfileRepository,
-                opLog);
+                nodeSensorRepo, equipmentTypeRepo, nodeEquipmentRepo, userNodeAccessRepo, opLog);
     }
-
-    private User stubUser(Long id, String role) {
-        User u = new User();
-        u.setId(id);
-        u.setRole(role);
-        return u;
-    }
-
-    private Node stubNode(String nodeId, String name, User owner) {
-        Node n = new Node();
-        n.setNodeId(nodeId);
-        n.setNodeName(name);
-        n.setUser(owner);
-        n.setOnline(true);
-        n.setSmartMode(false);
-        return n;
-    }
-
-    private DeviceCapability stubCapability(String deviceId, String version) {
-        DeviceCapability capability = new DeviceCapability();
-        capability.setDeviceId(deviceId);
-        capability.setCapabilityVersion(version);
-        return capability;
-    }
-
-    // ── listNodes ──
 
     @Test
-    void listNodes_admin_returnsAllNodes() {
-        User admin = stubUser(1L, "admin");
+    void listNodes_admin_returnsSingleDemoNode() {
+        User admin = user(1L, "admin");
         when(authService.requireUser("token")).thenReturn(admin);
-
-        Node n1 = stubNode("N01", "温室1", admin);
-        Node n2 = stubNode("N02", "温室2", admin);
-        when(nodeRepo.findAll()).thenReturn(List.of(n1, n2));
-        when(deviceProfileRepository.findByDeviceId(anyString())).thenReturn(Optional.empty());
-
-        List<NodeInfo> result = service.listNodes("token");
-
-        assertThat(result).hasSize(2);
-    }
-
-    @Test
-    void listNodes_normalUser_returnsOwnedAndAuthorized() {
-        User user = stubUser(2L, "user");
-        when(authService.requireUser("token")).thenReturn(user);
-
-        Node owned = stubNode("N01", "我的", user);
-        when(nodeRepo.findByUserId(2L)).thenReturn(List.of(owned));
-
-        UserNodeAccess access = new UserNodeAccess();
-        access.setNodeId("N02");
-        when(userNodeAccessRepo.findByUserId(2L)).thenReturn(List.of(access));
-
-        User other = stubUser(1L, "admin");
-        Node accessed = stubNode("N02", "授权的", other);
-        when(nodeRepo.findAllByNodeIdIn(List.of("N02"))).thenReturn(List.of(accessed));
-        when(deviceProfileRepository.findByDeviceId(anyString())).thenReturn(Optional.empty());
-
-        List<NodeInfo> result = service.listNodes("token");
-
-        assertThat(result).hasSize(2);
-    }
-
-    @Test
-    void listNodes_normalUser_overlapOwnedAndAuthorized_deduplicatesByNodeId() {
-        User user = stubUser(2L, "user");
-        when(authService.requireUser("token")).thenReturn(user);
-
-        Node owned = stubNode("N01", "我的", user);
-        when(nodeRepo.findByUserId(2L)).thenReturn(List.of(owned));
-
-        UserNodeAccess access = new UserNodeAccess();
-        access.setNodeId("N01");
-        when(userNodeAccessRepo.findByUserId(2L)).thenReturn(List.of(access));
-
-        User other = stubUser(1L, "admin");
-        Node accessedDuplicate = stubNode("N01", "授权重复", other);
-        when(nodeRepo.findAllByNodeIdIn(List.of("N01"))).thenReturn(List.of(accessedDuplicate));
-        when(deviceProfileRepository.findByDeviceId(anyString())).thenReturn(Optional.empty());
+        when(nodeRepo.findAll()).thenReturn(List.of(node("SIM_Node_01", "课程模拟温室节点", admin, true)));
 
         List<NodeInfo> result = service.listNodes("token");
 
         assertThat(result).hasSize(1);
-        assertThat(result.getFirst().id()).isEqualTo("N01");
+        assertThat(result.getFirst().id()).isEqualTo("SIM_Node_01");
+        assertThat(result.getFirst().status()).isEqualTo("online");
     }
 
-    // ── getNode ──
+    @Test
+    void listNodes_normalUser_returnsOwnedAndAuthorizedWithoutDuplicates() {
+        User user = user(2L, "user");
+        when(authService.requireUser("token")).thenReturn(user);
+        Node owned = node("SIM_Node_01", "课程模拟温室节点", user, true);
+        when(nodeRepo.findByUserId(2L)).thenReturn(List.of(owned));
+        UserNodeAccess access = new UserNodeAccess();
+        access.setNodeId("SIM_Node_01");
+        when(userNodeAccessRepo.findByUserId(2L)).thenReturn(List.of(access));
+        when(nodeRepo.findAllByNodeIdIn(List.of("SIM_Node_01"))).thenReturn(List.of(owned));
+
+        List<NodeInfo> result = service.listNodes("token");
+
+        assertThat(result).hasSize(1);
+        assertThat(result.getFirst().id()).isEqualTo("SIM_Node_01");
+    }
 
     @Test
     void getNode_ownerAccess_returnsDetail() {
-        User user = stubUser(1L, "user");
+        User user = user(2L, "user");
         when(authService.requireUser("token")).thenReturn(user);
+        when(nodeRepo.findByNodeId("SIM_Node_01"))
+                .thenReturn(Optional.of(node("SIM_Node_01", "课程模拟温室节点", user, true)));
 
-        Node node = stubNode("N01", "温室1", user);
-        when(nodeRepo.findByNodeId("N01")).thenReturn(Optional.of(node));
-        when(deviceProfileRepository.findByDeviceId("N01")).thenReturn(Optional.empty());
+        NodeDetail detail = service.getNode("token", "SIM_Node_01");
 
-        NodeDetail detail = service.getNode("token", "N01");
-
-        assertThat(detail.id()).isEqualTo("N01");
+        assertThat(detail.id()).isEqualTo("SIM_Node_01");
         assertThat(detail.status()).isEqualTo("online");
+        assertThat(detail.nodeState()).containsEntry("smartMode", false);
     }
 
     @Test
     void getNode_noAccess_throwsBizException403() {
-        User user = stubUser(2L, "user");
+        User user = user(2L, "user");
+        User owner = user(1L, "user");
         when(authService.requireUser("token")).thenReturn(user);
+        when(nodeRepo.findByNodeId("SIM_Node_01"))
+                .thenReturn(Optional.of(node("SIM_Node_01", "课程模拟温室节点", owner, true)));
+        when(userNodeAccessRepo.existsByUserIdAndNodeId(2L, "SIM_Node_01")).thenReturn(false);
 
-        User owner = stubUser(1L, "user");
-        Node node = stubNode("N01", "温室1", owner);
-        when(nodeRepo.findByNodeId("N01")).thenReturn(Optional.of(node));
-        when(userNodeAccessRepo.existsByUserIdAndNodeId(2L, "N01")).thenReturn(false);
-
-        assertThatThrownBy(() -> service.getNode("token", "N01"))
+        assertThatThrownBy(() -> service.getNode("token", "SIM_Node_01"))
                 .isInstanceOf(BizException.class)
                 .extracting("code").isEqualTo(403);
     }
 
     @Test
-    void getNode_nonExistent_throwsBizException404() {
-        User user = stubUser(1L, "user");
-        when(authService.requireUser("token")).thenReturn(user);
-        when(nodeRepo.findByNodeId("NONEXISTENT")).thenReturn(Optional.empty());
+    void getSensorMeta_returnsFixedDictionaryBindings() {
+        NodeSensor binding = new NodeSensor();
+        binding.setNodeId("SIM_Node_01");
+        binding.setSensorKey("temperature");
+        binding.setWarningMin(15.0);
+        binding.setWarningMax(35.0);
+        when(nodeSensorRepo.findByNodeId("SIM_Node_01")).thenReturn(List.of(binding));
+        SensorType type = new SensorType();
+        type.setSensorKey("temperature");
+        type.setName("空气温度");
+        type.setUnit("C");
+        type.setIcon("temp");
+        type.setBadgeColor("#FF7043");
+        type.setBgColor("#FFF3E0");
+        when(sensorTypeRepo.findBySensorKey("temperature")).thenReturn(Optional.of(type));
 
-        assertThatThrownBy(() -> service.getNode("token", "NONEXISTENT"))
-                .isInstanceOf(BizException.class)
-                .extracting("code").isEqualTo(404);
-    }
-
-    @Test
-    void listNodes_profileOnlineButLastSeenExpired_returnsOffline() {
-        User admin = stubUser(1L, "admin");
-        when(authService.requireUser("token")).thenReturn(admin);
-
-        Node n1 = stubNode("N01", "温室1", admin);
-        n1.setOnline(true);
-        when(nodeRepo.findAll()).thenReturn(List.of(n1));
-
-        DeviceProfile profile = new DeviceProfile();
-        profile.setDeviceId("N01");
-        profile.setOnline(true);
-        profile.setLastSeenAt(java.time.LocalDateTime.now().minusMinutes(30));
-        when(deviceProfileRepository.findByDeviceId("N01")).thenReturn(Optional.of(profile));
-
-        List<NodeInfo> result = service.listNodes("token");
-
-        assertThat(result).hasSize(1);
-        assertThat(result.getFirst().status()).isEqualTo("offline");
-    }
-
-    @Test
-    void getNode_profileOnlineAndRecentLastSeen_returnsOnline() {
-        User user = stubUser(1L, "user");
-        when(authService.requireUser("token")).thenReturn(user);
-
-        Node node = stubNode("N01", "温室1", user);
-        node.setOnline(false);
-        when(nodeRepo.findByNodeId("N01")).thenReturn(Optional.of(node));
-
-        DeviceProfile profile = new DeviceProfile();
-        profile.setDeviceId("N01");
-        profile.setOnline(true);
-        profile.setLastSeenAt(java.time.LocalDateTime.now());
-        when(deviceProfileRepository.findByDeviceId("N01")).thenReturn(Optional.of(profile));
-
-        NodeDetail detail = service.getNode("token", "N01");
-
-        assertThat(detail.status()).isEqualTo("online");
-    }
-
-    // ── getSensorMeta ──
-
-    @Test
-    void getSensorMeta_returnsMappedInfo() {
-        NodeSensor ns = new NodeSensor();
-        ns.setNodeId("N01");
-        ns.setSensorKey("temperature");
-        ns.setWarningMin(10.0);
-        ns.setWarningMax(35.0);
-        when(nodeSensorRepo.findByNodeId("N01")).thenReturn(List.of(ns));
-        when(deviceCapabilityRepository.findTopByDeviceIdOrderByCreatedAtDesc("N01")).thenReturn(Optional.empty());
-
-        SensorType st = new SensorType();
-        st.setSensorKey("temperature");
-        st.setName("温度");
-        st.setUnit("℃");
-        when(sensorTypeRepo.findBySensorKey("temperature")).thenReturn(Optional.of(st));
-
-        List<SensorMetaInfo> result = service.getSensorMeta("N01");
+        List<SensorMetaInfo> result = service.getSensorMeta("SIM_Node_01");
 
         assertThat(result).hasSize(1);
         assertThat(result.getFirst().key()).isEqualTo("temperature");
-        assertThat(result.getFirst().warningMin()).isEqualTo(10.0);
+        assertThat(result.getFirst().warningMax()).isEqualTo(35.0);
     }
 
-    // ── getEquipmentMeta ──
-
     @Test
-    void getEquipmentMeta_returnsMappedInfo() {
-        NodeEquipment ne = new NodeEquipment();
-        ne.setNodeId("N01");
-        ne.setEquipmentKey("water_pump");
-        when(nodeEquipmentRepo.findByNodeId("N01")).thenReturn(List.of(ne));
-        when(deviceCapabilityRepository.findTopByDeviceIdOrderByCreatedAtDesc("N01")).thenReturn(Optional.empty());
+    void getEquipmentMeta_returnsFixedDictionaryBindings() {
+        NodeEquipment binding = new NodeEquipment();
+        binding.setNodeId("SIM_Node_01");
+        binding.setEquipmentKey("water_pump");
+        when(nodeEquipmentRepo.findByNodeId("SIM_Node_01")).thenReturn(List.of(binding));
+        EquipmentType type = new EquipmentType();
+        type.setEquipmentKey("water_pump");
+        type.setName("水泵");
+        type.setIcon("pump");
+        type.setControllable(true);
+        type.setControlType("toggle");
+        when(equipmentTypeRepo.findByEquipmentKey("water_pump")).thenReturn(Optional.of(type));
 
-        EquipmentType et = new EquipmentType();
-        et.setEquipmentKey("water_pump");
-        et.setName("水泵");
-        et.setControllable(true);
-        when(equipmentTypeRepo.findByEquipmentKey("water_pump")).thenReturn(Optional.of(et));
-
-        List<EquipmentMetaInfo> result = service.getEquipmentMeta("N01");
+        List<EquipmentMetaInfo> result = service.getEquipmentMeta("SIM_Node_01");
 
         assertThat(result).hasSize(1);
         assertThat(result.getFirst().key()).isEqualTo("water_pump");
-        assertThat(result.getFirst().controllable()).isTrue();
         assertThat(result.getFirst().controlType()).isEqualTo("toggle");
     }
 
     @Test
-    void getSensorMeta_withCapability_prefersCapabilityAndAllowsUnknown() {
-        DeviceCapability capability = stubCapability("N01", "2.0");
-        when(deviceCapabilityRepository.findTopByDeviceIdOrderByCreatedAtDesc("N01"))
-                .thenReturn(Optional.of(capability));
-
-        CapabilitySensor airTemp = new CapabilitySensor();
-        airTemp.setDeviceId("N01");
-        airTemp.setCapabilityVersion("2.0");
-        airTemp.setSensorKey("air_temp");
-        airTemp.setDataType("number");
-
-        CapabilitySensor custom = new CapabilitySensor();
-        custom.setDeviceId("N01");
-        custom.setCapabilityVersion("2.0");
-        custom.setSensorKey("custom_sensor_x");
-        custom.setDataType("number");
-
-        when(capabilitySensorRepository.findByDeviceIdAndCapabilityVersionOrderBySensorKey("N01", "2.0"))
-                .thenReturn(List.of(airTemp, custom));
-
-        NodeSensor threshold = new NodeSensor();
-        threshold.setNodeId("N01");
-        threshold.setSensorKey("temperature");
-        threshold.setWarningMin(10.0);
-        threshold.setWarningMax(35.0);
-        when(nodeSensorRepo.findByNodeId("N01")).thenReturn(List.of(threshold));
-
-        SensorType sensorType = new SensorType();
-        sensorType.setSensorKey("temperature");
-        sensorType.setName("空气温度");
-        sensorType.setUnit("℃");
-        sensorType.setIcon("🌡️");
-        sensorType.setBadgeColor("#FF7043");
-        sensorType.setBgColor("#FFF3E0");
-        when(sensorTypeRepo.findBySensorKey("temperature")).thenReturn(Optional.of(sensorType));
-        when(sensorTypeRepo.findBySensorKey("custom_sensor_x")).thenReturn(Optional.empty());
-
-        List<SensorMetaInfo> result = service.getSensorMeta("N01");
-
-        assertThat(result).hasSize(2);
-        assertThat(result.stream().map(SensorMetaInfo::key)).containsExactly("temperature", "custom_sensor_x");
-        assertThat(result.stream().map(SensorMetaInfo::key)).doesNotContain("humidity");
-
-        SensorMetaInfo mapped = result.getFirst();
-        assertThat(mapped.key()).isEqualTo("temperature");
-        assertThat(mapped.warningMin()).isEqualTo(10.0);
-        assertThat(mapped.warningMax()).isEqualTo(35.0);
-
-        SensorMetaInfo unknown = result.get(1);
-        assertThat(unknown.key()).isEqualTo("custom_sensor_x");
-        assertThat(unknown.name()).isEqualTo("custom_sensor_x");
-    }
-
-    @Test
-    void getEquipmentMeta_withCapability_prefersCapabilityAndAllowsUnknown() {
-        DeviceCapability capability = stubCapability("N01", "2.0");
-        when(deviceCapabilityRepository.findTopByDeviceIdOrderByCreatedAtDesc("N01"))
-                .thenReturn(Optional.of(capability));
-
-        CapabilityEquipment waterPump = new CapabilityEquipment();
-        waterPump.setDeviceId("N01");
-        waterPump.setCapabilityVersion("2.0");
-        waterPump.setEquipmentKey("water_pump");
-        waterPump.setControllable(true);
-
-        CapabilityEquipment custom = new CapabilityEquipment();
-        custom.setDeviceId("N01");
-        custom.setCapabilityVersion("2.0");
-        custom.setEquipmentKey("custom_device_y");
-        custom.setControllable(false);
-
-        when(capabilityEquipmentRepository.findByDeviceIdAndCapabilityVersionOrderByEquipmentKey("N01", "2.0"))
-                .thenReturn(List.of(custom, waterPump));
-
-        EquipmentType equipmentType = new EquipmentType();
-        equipmentType.setEquipmentKey("water_pump");
-        equipmentType.setName("水泵");
-        equipmentType.setIcon("💦");
-        equipmentType.setControllable(true);
-        when(equipmentTypeRepo.findByEquipmentKey("water_pump")).thenReturn(Optional.of(equipmentType));
-        when(equipmentTypeRepo.findByEquipmentKey("custom_device_y")).thenReturn(Optional.empty());
-
-        List<EquipmentMetaInfo> result = service.getEquipmentMeta("N01");
-
-        assertThat(result).hasSize(2);
-        assertThat(result.stream().map(EquipmentMetaInfo::key))
-                .containsExactly("custom_device_y", "water_pump");
-        assertThat(result.stream().map(EquipmentMetaInfo::key)).doesNotContain("fan");
-
-        EquipmentMetaInfo unknown = result.getFirst();
-        assertThat(unknown.key()).isEqualTo("custom_device_y");
-        assertThat(unknown.name()).isEqualTo("custom_device_y");
-        assertThat(unknown.controllable()).isFalse();
-    }
-
-    // ── updateSensorThresholds ──
-
-    @Test
-    void updateSensorThresholds_nonExistentNode_throwsBizException404() {
-        User user = stubUser(1L, "user");
+    void updateSensorThresholds_authorizedUser_updatesBindingAndLogs() {
+        User user = user(2L, "user");
+        Node node = node("SIM_Node_01", "课程模拟温室节点", user, true);
+        NodeSensor binding = new NodeSensor();
+        binding.setNodeId("SIM_Node_01");
+        binding.setSensorKey("temperature");
         when(authService.requireUser("token")).thenReturn(user);
-        when(nodeRepo.findByNodeId("NONEXISTENT")).thenReturn(Optional.empty());
+        when(nodeRepo.findByNodeId("SIM_Node_01")).thenReturn(Optional.of(node));
+        when(nodeSensorRepo.findByNodeIdAndSensorKey("SIM_Node_01", "temperature")).thenReturn(Optional.of(binding));
 
-        assertThatThrownBy(() -> service.updateSensorThresholds("token", "NONEXISTENT", List.of()))
-                .isInstanceOf(BizException.class)
-                .extracting("code").isEqualTo(404);
+        service.updateSensorThresholds("token", "SIM_Node_01", List.of(new ThresholdUpdate("temperature", 12.0, 32.0)));
+
+        assertThat(binding.getWarningMin()).isEqualTo(12.0);
+        assertThat(binding.getWarningMax()).isEqualTo(32.0);
+        verify(nodeSensorRepo).save(binding);
+        verify(opLog).log("THRESHOLD_UPDATE", 2L, null, "node", "SIM_Node_01", "1 个传感器阈值已更新");
+    }
+
+    private User user(Long id, String role) {
+        User user = new User();
+        user.setId(id);
+        user.setRole(role);
+        return user;
+    }
+
+    private Node node(String nodeId, String name, User owner, boolean online) {
+        Node node = new Node();
+        node.setNodeId(nodeId);
+        node.setNodeName(name);
+        node.setUser(owner);
+        node.setOnline(online);
+        node.setSmartMode(false);
+        return node;
     }
 }

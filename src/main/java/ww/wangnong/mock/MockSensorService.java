@@ -8,19 +8,17 @@ import java.util.Random;
 
 import org.springframework.stereotype.Service;
 
-import ww.wangnong.config.condition.ConditionalOnMockMode;
 import ww.wangnong.service.SensorService;
 
 /**
  * Purpose: 在 mock 模式下生成传感器历史和设备统计的演示数据。
  * Responsibilities: 基于指标基准值生成平滑随机曲线，并返回最近 7 天设备统计。
  * Flow: 控制器查询 -> 按 metric/range 计算采样点 -> 生成 summary 与 points -> 返回结果。
- * Dependencies: SensorService、ConditionalOnMockMode。
+ * Dependencies: SensorService。
  * Input: nodeId、metric、range、equipmentKey。
  * Output: 可视化友好的历史曲线与统计数据。
  */
 @Service
-@ConditionalOnMockMode
 public class MockSensorService implements SensorService {
 
     private static final Random RNG = new Random();

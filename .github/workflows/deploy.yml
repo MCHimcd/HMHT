@@ -19,12 +19,12 @@ jobs:
         uses: actions/checkout@v4
 
       # ── 可改配置 2：JDK 版本 ──────────────────────────────────────
-      # 当前按 build.gradle 中 toolchain 配置使用 Java 21
+      # 当前按 build.gradle 中 toolchain 配置使用 Java 25
       - name: Setup JDK
         uses: actions/setup-java@v4
         with:
           distribution: temurin
-          java-version: '21'
+          java-version: '25'
           cache: gradle
 
       - name: Make gradlew executable

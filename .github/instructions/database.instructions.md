@@ -19,8 +19,8 @@ V{N}__{description}.sql
 
 ### 规则
 
-- **不修改已执行的迁移脚本** — 修改已部署的脚本会导致 Flyway 校验失败
-- 结构变更通过新增迁移脚本实现
+- 课程版数据库从 `V1__course_schema.sql` 开始，作为全新精简 schema 维护。
+- 课程版发布后，结构变更通过新增迁移脚本实现。
 - 迁移目录：`src/main/resources/db/migration/`
 
 ## JPA Entity 编写约定
@@ -68,16 +68,13 @@ public interface XxxRepository extends JpaRepository<Xxx, Long> {
 }
 ```
 
-V2 控制面常见查询模式：
-- 最新快照：`findTopByDeviceIdOrderByCreatedAtDesc(...)`
-- 扫描待处理命令：`findTop200ByStatusInOrderBySentAtAsc(...)`
+## 课程版种子数据
 
-## MockDataLifecycle 注意事项
-
-- **激活条件**：`@ConditionalOnMockMode`
-- **启动行为**：若 `users` 表为空则播种全部演示数据
-- **关闭行为**（`@PreDestroy`）：TRUNCATE mock + V2 控制面相关表
-- 修改种子数据时注意保持与 Entity 定义和迁移脚本的一致性
+- 种子入口：`EssentialDataSeeder`
+- 固定节点：`SIM_Node_01`
+- 固定传感器类型：`temperature`、`humidity`、`light`、`soilHumidity`
+- 固定设备类型：`water_pump`、`led_light`、`fan`
+- 修改种子数据时注意保持 Entity、迁移脚本、README 和 `docs/api-endpoints.md` 一致。
 
 ## 新增表步骤
 
@@ -85,5 +82,5 @@ V2 控制面常见查询模式：
 2. 创建 JPA Entity 类（`entity/` 包）
 3. 创建 Repository 接口（`repository/` 包）
 4. 编写 Repository 测试（测试规范见 `java.instructions.md`）
-5. 如 mock 模式需要种子数据，更新 `MockDataLifecycle`
-6. 更新 README.md「数据模型清单」
+5. 如课程演示需要种子数据，更新 `EssentialDataSeeder`
+6. 更新 README.md「Data Model」和 `docs/api-endpoints.md`

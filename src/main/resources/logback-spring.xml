@@ -28,17 +28,14 @@
         </rollingPolicy>
     </appender>
 
-    <!-- ── 默认 profile（dev / mock）── -->
-    <springProfile name="default | dev | mock">
+    <!-- ── 默认 profile（课程版开发）── -->
+    <springProfile name="default | dev">
         <logger name="ww.wangnong" level="DEBUG" />
     </springProfile>
 
     <!-- ── 生产 profile ── -->
     <springProfile name="prod">
         <logger name="ww.wangnong" level="INFO" />
-        <logger name="ww.wangnong.bridge.MqttBridge" level="INFO" />
-        <logger name="ww.wangnong.mqtt" level="INFO" />
-        <logger name="org.eclipse.paho" level="WARN" />
         <logger name="org.hibernate" level="WARN" />
     </springProfile>
 

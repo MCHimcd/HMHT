@@ -23,7 +23,7 @@ class AlertE2eTest extends E2eTestBase {
                 "warning", "温度超出阈值 35℃", "temperature", "空气温度",
                 false, null, System.currentTimeMillis()));
 
-        // 2) Query alerts — our alert is the newest, appears first (MockDataLifecycle
+        // 2) Query alerts — our alert is the newest, appears first (course seeder
         // seeds others)
         mockMvc.perform(post("/v1/alerts/list")
                 .contentType(MediaType.APPLICATION_JSON)

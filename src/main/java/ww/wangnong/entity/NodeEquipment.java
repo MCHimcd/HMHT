@@ -13,7 +13,7 @@ import lombok.Setter;
 /**
  * Purpose: 记录节点与设备类型的静态绑定关系。
  * Responsibilities: 维护 node_id 与 equipment_key 的唯一组合，供旧版元数据查询和 mock 种子使用。
- * Flow: MockDataLifecycle 或管理逻辑写入 -> NodeService 在无 capability 快照时回退读取。
+ * Flow: 课程版种子或管理逻辑写入 -> NodeService 读取固定设备绑定。
  * Dependencies: node_equipment 表。
  * Input: 节点标识与设备 key。
  * Output: 节点设备绑定关系。

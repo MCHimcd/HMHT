@@ -2,11 +2,9 @@ package ww.wangnong.web;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
-import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -17,10 +15,8 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
 import org.springframework.http.MediaType;
 import org.springframework.context.annotation.Import;
-import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
-import org.springframework.web.multipart.MultipartFile;
 
 import ww.wangnong.config.SecurityConfig;
 import ww.wangnong.exception.BizException;
@@ -103,72 +99,6 @@ class AuthControllerTest {
                                 .header("Authorization", "Bearer invalid"))
                                 .andExpect(status().isOk())
                                 .andExpect(jsonPath("$.code").value(401));
-        }
-
-        @Test
-        void uploadAvatar_success_returnsProfileWithNewAvatar() throws Exception {
-                MockMultipartFile file = new MockMultipartFile(
-                                "file", "avatar.png", "image/png", "fake-image-data".getBytes());
-
-                when(authService.uploadAvatar(eq("test-token"), any(MultipartFile.class)))
-                                .thenReturn(new Profile("WangNong_001", "测试用户", "13800000001",
-                                                null, null, "http://localhost:8080/api/uploads/avatars/user_1_123.png",
-                                                "user"));
-
-                mockMvc.perform(multipart("/v1/auth/avatar/upload")
-                                .file(file)
-                                .header("Authorization", "Bearer test-token"))
-                                .andExpect(status().isOk())
-                                .andExpect(jsonPath("$.code").value(200))
-                                .andExpect(jsonPath("$.data.avatarSrc")
-                                                .value("http://localhost:8080/api/uploads/avatars/user_1_123.png"));
-        }
-
-        @Test
-        void uploadAvatar_emptyFile_returnsBizError() throws Exception {
-                MockMultipartFile emptyFile = new MockMultipartFile(
-                                "file", "avatar.png", "image/png", new byte[0]);
-
-                when(authService.uploadAvatar(eq("test-token"), any(MultipartFile.class)))
-                                .thenThrow(new BizException(400, "文件不能为空"));
-
-                mockMvc.perform(multipart("/v1/auth/avatar/upload")
-                                .file(emptyFile)
-                                .header("Authorization", "Bearer test-token"))
-                                .andExpect(status().isOk())
-                                .andExpect(jsonPath("$.code").value(400))
-                                .andExpect(jsonPath("$.message").value("文件不能为空"));
-        }
-
-        @Test
-        void uploadAvatar_invalidToken_returnsBizError() throws Exception {
-                MockMultipartFile file = new MockMultipartFile(
-                                "file", "avatar.png", "image/png", "fake-image-data".getBytes());
-
-                when(authService.uploadAvatar(eq("invalid"), any(MultipartFile.class)))
-                                .thenThrow(new BizException(401, "未登录或 token 已过期"));
-
-                mockMvc.perform(multipart("/v1/auth/avatar/upload")
-                                .file(file)
-                                .header("Authorization", "Bearer invalid"))
-                                .andExpect(status().isOk())
-                                .andExpect(jsonPath("$.code").value(401));
-        }
-
-        @Test
-        void uploadAvatar_invalidContentType_returnsBizError() throws Exception {
-                MockMultipartFile file = new MockMultipartFile(
-                                "file", "document.pdf", "application/pdf", "fake-pdf-data".getBytes());
-
-                when(authService.uploadAvatar(eq("test-token"), any(MultipartFile.class)))
-                                .thenThrow(new BizException(400, "仅支持 PNG/JPEG 格式图片"));
-
-                mockMvc.perform(multipart("/v1/auth/avatar/upload")
-                                .file(file)
-                                .header("Authorization", "Bearer test-token"))
-                                .andExpect(status().isOk())
-                                .andExpect(jsonPath("$.code").value(400))
-                                .andExpect(jsonPath("$.message").value("仅支持 PNG/JPEG 格式图片"));
         }
 
         @Test

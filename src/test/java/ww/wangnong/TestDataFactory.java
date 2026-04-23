@@ -3,7 +3,6 @@ package ww.wangnong;
 import java.time.LocalDateTime;
 
 import ww.wangnong.entity.Alert;
-import ww.wangnong.entity.ChatMessage;
 import ww.wangnong.entity.EquipmentType;
 import ww.wangnong.entity.Node;
 import ww.wangnong.entity.NodeEquipment;
@@ -72,7 +71,7 @@ public final class TestDataFactory {
         return ns;
     }
 
-    /** NodeSensor with thresholds set — used by TelemetryAlertCheckerTest. */
+    /** NodeSensor with thresholds set. */
     public static NodeSensor nodeSensor(String nodeId, String sensorKey,
             Double warningMin, Double warningMax) {
         NodeSensor ns = nodeSensor(nodeId, sensorKey);
@@ -166,13 +165,4 @@ public final class TestDataFactory {
         return vc;
     }
 
-    // ── ChatMessage ──
-
-    public static ChatMessage chatMessage(User user, String role, String content) {
-        ChatMessage cm = new ChatMessage();
-        cm.setUser(user);
-        cm.setRole(role);
-        cm.setContent(content);
-        return cm;
-    }
 }

@@ -6,20 +6,18 @@ import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
-import org.springframework.web.multipart.MultipartFile;
 
 import ww.wangnong.dto.ApiResponse;
 import ww.wangnong.service.AuthService;
 
 /**
  * Purpose: 暴露认证与用户资料相关 REST 端点。
- * Responsibilities: 接收登录、注册、验证码、密码、头像和资料请求；提取 Bearer token；将请求委托给 AuthService。
+ * Responsibilities: 接收登录、注册、验证码、密码和资料请求；提取 Bearer token；将请求委托给 AuthService。
  * Flow: HTTP 请求 -> 解析 request record 或 multipart -> extractToken -> AuthService
  * -> ApiResponse.ok。
  * Dependencies: AuthService、ApiResponse、Spring Multipart 支持。
- * Input: JSON 请求体、Authorization 请求头、头像上传文件。
+ * Input: JSON 请求体、Authorization 请求头。
  * Output: 登录结果、用户资料或空成功响应。
  * Side Effects: 可能触发验证码发送、密码修改、头像文件写入与操作日志记录。
  */
@@ -93,19 +91,6 @@ public class AuthController {
             @RequestBody ChangePasswordRequest req) {
         authService.changePassword(extractToken(auth), req.oldPassword(), req.newPassword());
         return ApiResponse.ok();
-    }
-
-    @PostMapping("/avatar/use-fixed")
-    public ApiResponse<?> useFixedAvatar(
-            @RequestHeader(value = "Authorization", defaultValue = "") String auth) {
-        return ApiResponse.ok(authService.useFixedAvatar(extractToken(auth)));
-    }
-
-    @PostMapping("/avatar/upload")
-    public ApiResponse<?> uploadAvatar(
-            @RequestHeader(value = "Authorization", defaultValue = "") String auth,
-            @RequestParam("file") MultipartFile file) {
-        return ApiResponse.ok(authService.uploadAvatar(extractToken(auth), file));
     }
 
     @PostMapping("/logout")
