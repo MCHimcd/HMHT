@@ -1,77 +1,83 @@
-# HMHT 课程版前端页面流程
+# Frontend Page Flow
 
-本文描述首版前端的路由、导航和页面跳转关系。页面命名以实现时可直接转化为路由为准，具体实现默认采用 Vite + Vue 3 + Vue Router。
+本文描述当前 Vue 3 前端的路由、导航、认证跳转和页面状态。实现以 `frontend/src/router/index.ts` 为准。
 
-## 路由总览
+## Routes
 
-| 路由 | 页面 | 认证 | 说明 |
-|------|------|------|------|
-| `/login` | 登录 | 否 | 默认未登录入口 |
-| `/register` | 注册 | 否 | 课程演示注册流程 |
-| `/forgot-password` | 忘记密码 | 否 | 可选页面，可延后 |
-| `/` | 首页概览 | 是 | 登录后默认页，展示节点和关键摘要 |
-| `/nodes/:nodeId` | 节点详情 | 是 | 展示节点状态、传感器和设备元数据 |
-| `/nodes/:nodeId/sensors` | 传感器曲线 | 否或是 | 后端当前不强制认证；前端建议登录后访问 |
-| `/nodes/:nodeId/equipment` | 设备统计 | 否或是 | 后端当前不强制认证；前端建议登录后访问 |
-| `/alerts` | 告警列表 | 否或是 | 后端当前不强制认证；前端建议登录后访问 |
-| `/tasks` | 定时任务 | 是 | 当前用户任务管理 |
-| `/profile` | 个人资料 | 是 | 资料修改、改密、登出 |
-| `/admin` | 管理入口 | 是，管理员 | 可选二期，展示节点、用户、授权、日志 |
+| Route | Page | Auth | Notes |
+|-------|------|------|-------|
+| `/login` | 登录 | No | 未登录入口 |
+| `/register` | 注册 | No | 课程演示注册流程 |
+| `/forgot-password` | 忘记密码 | No | 验证码重置密码 |
+| `/` | Redirect | - | 重定向到 `/home` |
+| `/home` | 控制台概览 | Yes | 登录后默认页 |
+| `/gateway` | 网关管理 | Yes | 设备管理入口页 |
+| `/nodes/:nodeId` | 节点详情 | Yes | 节点状态、元数据、告警、任务摘要 |
+| `/nodes/:nodeId/templates` | 设备模板 | Yes | 固定设备类型和控制形态 |
+| `/nodes/:nodeId/control` | 设备控制演示 | Yes | 前端控制面板演示，不下发真实命令 |
+| `/nodes/:nodeId/realtime` | 实时数据 | Yes | 基于模拟历史接口展示近实时视图 |
+| `/nodes/:nodeId/history` | 历史数据 | Yes | 传感器曲线 |
+| `/nodes/:nodeId/equipment/stats` | 设备统计 | Yes | 设备统计趋势 |
+| `/strategies` | 自动化策略 | Yes | 课程策略展示和任务关联 |
+| `/tasks` | 任务调度 | Yes | 当前用户任务 CRUD |
+| `/alerts` | 告警中心 | Yes | 告警筛选、分页和处理 |
+| `/profile` | 系统设置 | Yes | 个人资料、密码、登出 |
+| `/admin` | 用户管理 | Admin | 节点、用户、授权管理 |
+| `/admin/logs` | 操作日志 | Admin | 日志查询 |
 
-## 主流程
+Compatibility redirects:
+
+| Old Route | Redirect |
+|-----------|----------|
+| `/dashboard` | `/home` |
+| `/nodes/:nodeId/sensors` | `/nodes/:nodeId/history` |
+| `/nodes/:nodeId/equipment` | `/nodes/:nodeId/control` |
+
+## Main Flow
 
 ```mermaid
 flowchart TD
-    A["打开前端应用"] --> B{"本地存在有效 token?"}
-    B -- "否" --> C["/login"]
-    C --> D["提交手机号和密码"]
-    D --> E{"登录成功?"}
-    E -- "否" --> C
-    E -- "是" --> F["保存 token 与过期时间"]
-    B -- "是" --> G["拉取 /v1/auth/profile"]
+    A["Open app"] --> B{"Valid local token?"}
+    B -- "No" --> C["/login"]
+    C --> D["Submit phone and password"]
+    D --> E{"Login success?"}
+    E -- "No" --> C
+    E -- "Yes" --> F["Save token and expiry"]
+    B -- "Yes" --> G["GET /v1/auth/profile"]
     F --> G
-    G --> H["/ 首页概览"]
-    H --> I["/nodes/:nodeId 节点详情"]
-    I --> J["/nodes/:nodeId/sensors 传感器曲线"]
-    I --> K["/nodes/:nodeId/equipment 设备统计"]
-    H --> L["/alerts 告警列表"]
-    H --> M["/tasks 定时任务"]
-    H --> N["/profile 个人资料"]
+    G --> H["/home"]
+    H --> I["/nodes/:nodeId"]
+    I --> J["/nodes/:nodeId/history"]
+    I --> K["/nodes/:nodeId/control"]
+    I --> L["/nodes/:nodeId/equipment/stats"]
+    H --> M["/alerts"]
+    H --> N["/tasks"]
+    H --> O["/profile"]
+    O --> P{"Admin?"}
+    P -- "Yes" --> Q["/admin and /admin/logs"]
 ```
 
-## 页面结构
+## Navigation Rules
 
-| 区域 | 内容 |
-|------|------|
-| 应用外壳 | 顶部栏或侧边栏、当前用户、登出按钮、主内容区 |
-| 首页概览 | 节点列表、未处理告警数量、常用入口、健康检查状态 |
-| 节点详情 | 节点名称、状态、传感器元数据、设备元数据、阈值信息 |
-| 传感器曲线 | 指标切换、时间范围切换、摘要卡片、折线图 |
-| 设备统计 | 设备切换、统计摘要、趋势图或柱状图 |
-| 告警列表 | 筛选条件、分页列表、处理按钮 |
-| 定时任务 | 任务表格、创建/编辑弹窗、启停开关、删除确认 |
-| 个人资料 | 基本资料表单、密码修改表单 |
-
-## 导航规则
-
-- 未登录访问需要认证的页面时，跳转 `/login`。
-- 登录成功后跳转 `/`，如果有登录前目标地址，可回跳该地址。
+- 未登录访问需要认证的页面时，跳转 `/login?redirect=<target>`。
+- 登录成功后优先回跳 `redirect`，否则进入 `/home`。
 - token 过期或接口返回 `code=401` 时，清理登录态并跳转 `/login`。
-- 普通用户不显示 `/admin` 导航入口；管理员根据 `profile.role` 显示。
-- 课程版固定节点为 `SIM_Node_01`，但页面仍按 `nodeId` 参数实现，便于兼容管理接口创建的演示节点。
+- 登录用户访问 `/login`、`/register`、`/forgot-password` 时，跳转 `/home`。
+- 普通用户不能进入 `/admin` 和 `/admin/logs`；管理员根据 `profile.role` 判断。
+- 页面按 `nodeId` 参数实现，默认演示节点为 `SIM_Node_01`。
 
-## 页面状态
+## Page States
 
-| 状态 | 展示规则 |
-|------|----------|
-| loading | 数据请求中展示骨架屏、加载条或局部加载状态 |
-| empty | 接口成功但无数据时展示空状态和可执行动作 |
-| error | 网络错误或业务 `code != 200` 时展示错误消息和重试入口 |
-| ready | 数据完整时展示页面主体 |
+| State | Rule |
+|-------|------|
+| `loading` | 数据请求中显示局部加载状态 |
+| `empty` | 请求成功但无数据时显示空状态和可执行动作 |
+| `error` | 网络错误或业务 `code != 200` 时显示错误消息和重试入口 |
+| `ready` | 数据完整时展示页面主体 |
 
-## 移动端规则
+## Responsive Rules
 
 - 首版需要能在手机浏览器查看，不要求完整移动端后台体验。
-- 导航在窄屏下折叠为顶部菜单或抽屉。
+- 窄屏下导航折叠为顶部菜单或抽屉。
 - 表格在窄屏下可转为列表项，避免横向溢出。
-- 图表容器保持固定最小高度，切换指标时不应造成布局跳动。
+- 图表容器保持固定最小高度，切换指标时不造成布局跳动。

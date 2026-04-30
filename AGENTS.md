@@ -1,22 +1,59 @@
-# HMHT Instructions For Codex
+# HMHT Agent Instructions
 
-Apply these rules for all files under `HMHT/`.
+Apply these rules to every file under this repository.
 
-Read first:
-- [.github/copilot-instructions.md](/d:/projects/ww/HMHT/.github/copilot-instructions.md)
-- [.github/instructions/java.instructions.md](/d:/projects/ww/HMHT/.github/instructions/java.instructions.md)
-- [.github/instructions/database.instructions.md](/d:/projects/ww/HMHT/.github/instructions/database.instructions.md) for entity, repository, and migration work
+## Priority
 
-Non-negotiable rules:
-- Clarify unclear requirements before implementation.
-- Update tests first or together with the implementation.
-- Sync `README.md` and `docs/api-endpoints.md` when controllers, services, entities, env vars, migrations, or the fixed course data change.
-- After each modification, append the change to `CHANGELOG.md`.
-- Final verification for Java changes: `./gradlew clean bootJar` and `./gradlew test`.
+1. Follow this file for repository entry rules.
+2. Read [.github/copilot-instructions.md](.github/copilot-instructions.md) before planning or editing.
+3. For Java changes, also read [.github/instructions/java.instructions.md](.github/instructions/java.instructions.md).
+4. For entity, repository, or migration changes, also read [.github/instructions/database.instructions.md](.github/instructions/database.instructions.md).
 
-Key coding constraints:
-- Use constructor injection, never field `@Autowired`.
-- Do not add runtime modes, MQTT, Python, hardware, or InfluxDB integration to the course edition.
+No `agent.md` file is maintained in this repository; `AGENTS.md` is the agent entry point.
+
+## Workflow
+
+- Clarify requirements before implementation when scope, behavior, or ownership is ambiguous.
+- Update tests first or together with implementation.
+- Append the final change record to `CHANGELOG.md` for every completed modification.
+- Do not modify source code for documentation-only tasks.
+
+## Project Boundaries
+
+- HMHT is a course-edition Spring Boot backend with a Vue 3 frontend.
+- Runtime shape is fixed: Java backend, MySQL, Flyway, fixed simulated course data, and generated demo sensor data.
+- Do not add runtime modes, MQTT, Python, hardware integration, InfluxDB, device ACK loops, or external time-series data.
+
+## Sync Rules
+
+When controllers, services, entities, environment variables, migrations, fixed course data, or frontend request contracts change, keep these documents aligned:
+
+- `README.md`
+- `docs/api-endpoints.md`
+- related `docs/*.md`
+- `CHANGELOG.md`
+
+## Java Rules
+
+- Use constructor injection; never use field `@Autowired`.
 - Prefer Java `record` for DTOs.
 - Use `@Getter @Setter` for entities, not `@Data`.
-- Use `ApiResponse<T>` for responses and `BizException` for business errors.
+- Return `ApiResponse<T>` from controllers.
+- Use `BizException` for business errors.
+
+## Verification
+
+For Java changes, run:
+
+```bash
+./gradlew clean bootJar
+./gradlew test
+```
+
+For frontend changes, run the relevant `frontend/package.json` scripts, usually:
+
+```bash
+cd frontend
+npm run build
+npm run test
+```

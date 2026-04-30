@@ -1,8 +1,8 @@
-# HMHT 课程版 API 文档
+# HMHT Course API
 
-基路径：`/api`
+Base path: `/api`.
 
-统一响应：
+All endpoints return the unified response shape:
 
 ```json
 {
@@ -12,24 +12,24 @@
 }
 ```
 
-业务错误仍返回 HTTP 200，由 `code` 表示业务状态码。
+Business errors are represented by `code` and `message`; the HTTP status may still be `200`.
 
-## 认证 `/v1/auth`
+## Auth
 
-| 方法 | 路径 | 说明 | 认证 |
-|------|------|------|------|
-| POST | `/v1/auth/send-verification-code` | 获取测试验证码 | 否 |
-| POST | `/v1/auth/register` | 注册用户 | 否 |
-| POST | `/v1/auth/login` | 登录并返回内存 token | 否 |
-| POST | `/v1/auth/forgot-password` | 重置密码 | 否 |
+Prefix: `/v1/auth`.
+
+| Method | Path | Description | Auth |
+|--------|------|-------------|------|
+| POST | `/v1/auth/send-verification-code` | 获取测试验证码 | No |
+| POST | `/v1/auth/register` | 注册用户 | No |
+| POST | `/v1/auth/login` | 登录并返回业务 token | No |
+| POST | `/v1/auth/forgot-password` | 重置密码 | No |
 | GET | `/v1/auth/profile` | 获取个人资料 | Bearer Token |
 | PUT | `/v1/auth/profile` | 更新个人资料 | Bearer Token |
 | PUT | `/v1/auth/password` | 修改密码 | Bearer Token |
 | POST | `/v1/auth/logout` | 登出 | Bearer Token |
 
-### `POST /v1/auth/login`
-
-请求：
+Login request:
 
 ```json
 {
@@ -38,7 +38,7 @@
 }
 ```
 
-响应 `data`：
+Login response `data`:
 
 ```json
 {
@@ -47,38 +47,38 @@
 }
 ```
 
-## 节点 `/v1/nodes`
+## Nodes
 
-课程版只保留一个模拟节点：`SIM_Node_01`。
+Prefix: `/v1/nodes`.
 
-| 方法 | 路径 | 说明 | 认证 |
-|------|------|------|------|
+| Method | Path | Description | Auth |
+|--------|------|-------------|------|
 | GET | `/v1/nodes` | 获取当前用户可见节点 | Bearer Token |
 | GET | `/v1/nodes/{nodeId}` | 获取节点详情 | Bearer Token |
-| GET | `/v1/nodes/{nodeId}/sensor-meta` | 获取固定传感器元数据 | 否 |
-| GET | `/v1/nodes/{nodeId}/equipment-meta` | 获取固定设备元数据 | 否 |
+| GET | `/v1/nodes/{nodeId}/sensor-meta` | 获取固定传感器元数据 | No |
+| GET | `/v1/nodes/{nodeId}/equipment-meta` | 获取固定设备元数据 | No |
 | PUT | `/v1/nodes/{nodeId}/sensor-thresholds` | 更新传感器阈值 | Bearer Token |
 
-固定传感器类型：
+Course seed node: `SIM_Node_01`.
 
-| key | name | unit |
+Sensor types:
+
+| Key | Name | Unit |
 |-----|------|------|
 | `temperature` | 空气温度 | `C` |
 | `humidity` | 空气湿度 | `%` |
 | `light` | 光照强度 | `Lux` |
 | `soilHumidity` | 土壤湿度 | `%` |
 
-固定设备类型：
+Equipment types:
 
-| key | name | controlType |
-|-----|------|-------------|
+| Key | Name | Control Type |
+|-----|------|--------------|
 | `water_pump` | 水泵 | `toggle` |
 | `led_light` | 补光灯 | `slider` |
 | `fan` | 排风扇 | `toggle` |
 
-### `PUT /v1/nodes/{nodeId}/sensor-thresholds`
-
-请求：
+Threshold update request:
 
 ```json
 [
@@ -90,78 +90,84 @@
 ]
 ```
 
-## 传感器与设备
+## Sensor And Equipment
 
-| 方法 | 路径 | 说明 | 认证 |
-|------|------|------|------|
-| GET | `/v1/sensors/{nodeId}/history?metric=temperature&range=24h` | 生成模拟传感器曲线 | 否 |
-| POST | `/v1/equipment/stats` | 生成模拟设备统计 | 否 |
+| Method | Path | Description | Auth |
+|--------|------|-------------|------|
+| GET | `/v1/sensors/{nodeId}/history?metric=temperature&range=24h` | 生成模拟传感器曲线 | No |
+| POST | `/v1/equipment/stats` | 生成模拟设备统计 | No |
 
-支持的 `range`：
+Supported `range`:
 
-| range | 说明 |
-|-------|------|
+| Range | Description |
+|-------|-------------|
 | `24h` | 最近 24 小时 |
 | `7d` | 最近 7 天 |
 | `30d` | 最近 30 天 |
 
-### `POST /v1/equipment/stats`
-
-请求：
+Equipment stats request:
 
 ```json
 {
-  "nodeId": "SIM_Node_01",
-  "equipmentKey": "water_pump"
+  "node_id": "SIM_Node_01",
+  "equipment_key": "water_pump"
 }
 ```
 
-## 告警 `/v1/alerts`
+`/v1/equipment/stats` also accepts wrapper fields such as `query.node_id`, `device_id`, `query.equipment_key`, `equipment_type`, and `device_type`. New frontend code should use `node_id` and `equipment_key`. If the node id is omitted, the backend uses the course node `SIM_Node_01`.
 
-| 方法 | 路径 | 说明 | 认证 |
-|------|------|------|------|
-| POST | `/v1/alerts/list` | 查询告警列表 | 否 |
-| POST | `/v1/alerts/handle` | 处理告警 | 否 |
+## Alerts
 
-### `POST /v1/alerts/list`
+Prefix: `/v1/alerts`.
 
-请求：
+| Method | Path | Description | Auth |
+|--------|------|-------------|------|
+| POST | `/v1/alerts/list` | 查询告警列表 | No |
+| POST | `/v1/alerts/handle` | 处理告警 | No |
+
+List request:
 
 ```json
 {
-  "nodeId": "SIM_Node_01",
-  "handled": false,
-  "page": 1,
-  "size": 10
+  "query": {
+    "node_id": "SIM_Node_01",
+    "filter_status": "unhandled",
+    "page": 1,
+    "pageSize": 10
+  }
 }
 ```
 
-### `POST /v1/alerts/handle`
+`filter_status` supports `all`, `handled`, and `unhandled`. The controller also normalizes `query.size` to `query.pageSize`.
 
-请求：
+Handle request:
 
 ```json
 {
-  "alertId": "COURSE_ALERT_1",
-  "action": "handle"
+  "data": {
+    "alert_id": "COURSE_ALERT_1",
+    "action": "handle"
+  }
 }
 ```
 
-## 定时任务 `/v1/tasks`
+Alert list response fields use `snake_case`, including `unhandled_count`, `handled_recent_count`, `alert_id`, `node_id`, `type_name`, `source_name`, `is_handled`, and `handle_time`.
 
-课程版任务只保存配置，不向真实设备下发命令。
+## Scheduled Tasks
 
-| 方法 | 路径 | 说明 | 认证 |
-|------|------|------|------|
+Prefix: `/v1/tasks`.
+
+Tasks store configuration only; they do not send commands to real devices.
+
+| Method | Path | Description | Auth |
+|--------|------|-------------|------|
 | GET | `/v1/tasks` | 列出当前用户任务 | Bearer Token |
 | POST | `/v1/tasks` | 创建任务 | Bearer Token |
 | PUT | `/v1/tasks/{taskId}` | 更新任务 | Bearer Token |
 | DELETE | `/v1/tasks/{taskId}` | 删除任务 | Bearer Token |
-| PUT | `/v1/tasks/{taskId}/toggle` | 切换任务启用状态 | Bearer Token |
+| PUT | `/v1/tasks/{taskId}/toggle` | 切换启用状态 | Bearer Token |
 
-### `POST /v1/tasks`
-
-请求：
+Create/update request:
 
 ```json
 {
@@ -175,10 +181,12 @@
 }
 ```
 
-## 管理 `/v1/admin`
+## Admin
 
-| 方法 | 路径 | 说明 | 认证 |
-|------|------|------|------|
+Prefix: `/v1/admin`.
+
+| Method | Path | Description | Auth |
+|--------|------|-------------|------|
 | POST | `/v1/admin/nodes` | 创建节点 | Bearer Token, admin |
 | PUT | `/v1/admin/nodes/{nodeId}` | 更新节点 | Bearer Token, admin |
 | DELETE | `/v1/admin/nodes/{nodeId}` | 删除节点 | Bearer Token, admin |
@@ -187,21 +195,23 @@
 | GET | `/v1/admin/users/{userId}/nodes` | 查询用户授权节点 | Bearer Token, admin |
 | PUT | `/v1/admin/users/{userId}/nodes` | 设置用户授权节点 | Bearer Token, admin |
 
-虽然课程版默认只种子化 `SIM_Node_01`，管理接口仍可用于课程 CRUD 演示。
+The course seed data creates `SIM_Node_01`, but admin APIs can still create extra demo nodes.
 
-## 操作日志 `/v1/admin/logs`
+## Operation Logs
 
-| 方法 | 路径 | 说明 | 认证 |
-|------|------|------|------|
-| GET | `/v1/admin/logs?page=1&size=20&type=LOGIN` | 查询操作日志 | 否 |
+Prefix: `/v1/admin/logs`.
 
-## 健康检查 `/v1/health`
+| Method | Path | Description | Auth |
+|--------|------|-------------|------|
+| GET | `/v1/admin/logs?page=1&size=20&type=LOGIN` | 查询操作日志 | No |
 
-| 方法 | 路径 | 说明 | 认证 |
-|------|------|------|------|
-| GET | `/v1/health` | 查询课程版服务状态 | 否 |
+## Health
 
-响应 `data`：
+| Method | Path | Description | Auth |
+|--------|------|-------------|------|
+| GET | `/v1/health` | 查询课程版服务状态 | No |
+
+Response `data`:
 
 ```json
 {

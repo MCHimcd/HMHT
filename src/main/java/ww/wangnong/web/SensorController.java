@@ -23,6 +23,8 @@ import ww.wangnong.service.SensorService;
 @RestController
 public class SensorController {
 
+    private static final String DEFAULT_COURSE_NODE_ID = "SIM_Node_01";
+
     private final SensorService sensorService;
 
     public SensorController(SensorService sensorService) {
@@ -51,7 +53,7 @@ public class SensorController {
                 str(query.get("node_id")),
                 str(body.get("device_id")),
                 str(query.get("device_id")),
-                "A03_Node_01");
+                DEFAULT_COURSE_NODE_ID);
 
         String key = firstNonBlank(
                 str(body.get("equipment_key")),

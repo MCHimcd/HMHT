@@ -1,15 +1,15 @@
-# 课程版五人分工明细
+# Course Team Split
 
 本分工面向 HMHT 课程版单体 Spring Boot 后端。五个人在同一个仓库中协作，最终组合为一个可运行应用。运行形态固定为 Java 25 + MySQL + `SIM_Node_01` 模拟节点，不包含 MQTT、Python、硬件、InfluxDB 或多运行模式。
 
-## 分工原则
+## Principles
 
 - 每个文件只有一个主负责人，避免多人同时修改同一文件。
 - 公共接口变更必须提前同步给相关负责人。
 - Controller、Service、Entity、Repository、测试和文档必须一起维护。
 - 每次合并前至少运行 `./gradlew test`；集成负责人最终运行 `./gradlew clean bootJar`。
 
-## 1 号：工程基础、启动配置、数据库基线和操作日志
+## Person 1: Build, Bootstrap, Schema, And Logs
 
 负责 Java 25 工程、课程版启动、固定种子数据、数据库迁移、健康检查、操作日志和集成 E2E 基础。
 
@@ -50,7 +50,7 @@
 | `src/test/java/ww/wangnong/web/OperationLogControllerTest.java` | 操作日志 Controller 测试 |
 | `src/test/resources/application.properties` | 测试配置 |
 
-## 2 号：用户认证与个人资料
+## Person 2: Auth And Profile
 
 负责验证码、注册、登录、个人资料、密码、登出和业务 token 校验。
 
@@ -69,7 +69,7 @@
 | `src/test/java/ww/wangnong/service/impl/DatabaseAuthServiceTest.java` | 认证服务测试 |
 | `src/test/java/ww/wangnong/web/AuthControllerTest.java` | 认证 Controller 测试 |
 
-## 3 号：模拟节点、固定传感器和固定设备类型
+## Person 3: Node, Sensor Metadata, And Equipment Metadata
 
 负责 `SIM_Node_01`、固定传感器字典、固定设备字典、节点授权、节点元数据和阈值更新。
 
@@ -95,7 +95,7 @@
 | `src/test/java/ww/wangnong/service/impl/DatabaseNodeServiceTest.java` | 节点服务测试 |
 | `src/test/java/ww/wangnong/web/NodeControllerTest.java` | 节点 Controller 测试 |
 
-## 4 号：传感器模拟数据、设备统计、告警、统一响应和异常处理
+## Person 4: Sensor Simulation, Equipment Stats, Alerts, And Responses
 
 负责传感器模拟数据、设备统计、告警列表、告警处理、统一响应和异常处理。
 
@@ -122,7 +122,7 @@
 | `src/test/java/ww/wangnong/web/AlertControllerTest.java` | 告警 Controller 测试 |
 | `src/test/java/ww/wangnong/e2e/AlertE2eTest.java` | 告警 E2E 测试 |
 
-## 5 号：定时任务、后台管理、操作日志和最终文档
+## Person 5: Tasks, Admin, Logs, And Documentation
 
 负责任务 CRUD、管理员功能、API 文档、README、部署说明和五人分工文档。
 

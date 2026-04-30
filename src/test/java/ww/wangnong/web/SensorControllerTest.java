@@ -65,8 +65,8 @@ class SensorControllerTest {
     }
 
     @Test
-    void getEquipmentStats_returnsResult() throws Exception {
-        when(sensorService.getEquipmentStats(eq("A03_Node_01"), eq("water_pump")))
+    void getEquipmentStats_missingNodeId_usesCourseNode() throws Exception {
+        when(sensorService.getEquipmentStats(eq("SIM_Node_01"), eq("water_pump")))
                 .thenReturn(new EquipmentStatsResult(
                         Map.of("total_value", 100.0, "unit", "灌溉量(升)"),
                         List.of(new StatsPoint("01-01", 10.0))));

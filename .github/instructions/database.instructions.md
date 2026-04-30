@@ -1,29 +1,35 @@
 ---
-description: "数据库约定 - Flyway 迁移、Entity 编写、Repository 模式"
+description: "Database rules for HMHT entities, repositories, migrations, and seed data"
 applyTo: "src/main/java/ww/wangnong/entity/**/*.java,src/main/java/ww/wangnong/repository/**/*.java,src/main/resources/db/**"
 ---
 
-# 数据库约定
+# Database Instructions
 
-## Flyway 迁移
+## Scope
 
-### 命名规范
+适用于 JPA Entity、Spring Data Repository、Flyway 迁移和课程种子数据。
 
+## Flyway
+
+迁移目录：
+
+```text
+src/main/resources/db/migration/
 ```
+
+命名格式：
+
+```text
 V{N}__{description}.sql
 ```
 
-- `N` — 版本号（递增整数：1, 2, 3...）
-- `__` — **双下划线**分隔
-- `description` — 简短英文描述（snake_case）
+- `N` 为递增整数。
+- 双下划线 `__` 必须保留。
+- `description` 使用简短英文 `snake_case`。
+- 课程版从 `V1__course_schema.sql` 开始维护全新精简 schema。
+- 已发布结构变更通过新增迁移脚本完成，不直接改历史迁移。
 
-### 规则
-
-- 课程版数据库从 `V1__course_schema.sql` 开始，作为全新精简 schema 维护。
-- 课程版发布后，结构变更通过新增迁移脚本实现。
-- 迁移目录：`src/main/resources/db/migration/`
-
-## JPA Entity 编写约定
+## Entity
 
 ```java
 @Entity
@@ -48,39 +54,44 @@ public class XxxEntity {
 }
 ```
 
-### 规则
-
-| 规则 | 说明 |
+| Area | Rule |
 |------|------|
-| 注解 | `@Getter @Setter`（不用 `@Data`） |
-| 主键 | `@Id @GeneratedValue(strategy = GenerationType.IDENTITY)` |
-| 表名/列名 | snake_case |
-| 时间戳 | `@CreationTimestamp` / `@UpdateTimestamp` |
-| 关联关系 | `@ManyToOne(fetch = FetchType.LAZY)` + `@JoinColumn` |
+| Lombok | `@Getter @Setter`，不用 `@Data` |
+| Primary key | `@Id` + `@GeneratedValue(strategy = GenerationType.IDENTITY)` |
+| Table/column names | `snake_case` |
+| Timestamps | `@CreationTimestamp` / `@UpdateTimestamp` |
+| Associations | 默认 `FetchType.LAZY`，显式 `@JoinColumn` |
 
-## Repository 约定
+## Repository
 
 ```java
 public interface XxxRepository extends JpaRepository<Xxx, Long> {
     Optional<Xxx> findByXxxId(String xxxId);
+
     List<Xxx> findByNodeId(String nodeId);
+
     boolean existsByPhone(String phone);
 }
 ```
 
-## 课程版种子数据
+## Seed Data
 
-- 种子入口：`EssentialDataSeeder`
-- 固定节点：`SIM_Node_01`
-- 固定传感器类型：`temperature`、`humidity`、`light`、`soilHumidity`
-- 固定设备类型：`water_pump`、`led_light`、`fan`
-- 修改种子数据时注意保持 Entity、迁移脚本、README 和 `docs/api-endpoints.md` 一致。
+种子入口：`EssentialDataSeeder`。
 
-## 新增表步骤
+| Item | Value |
+|------|-------|
+| Node | `SIM_Node_01` |
+| Sensor keys | `temperature`, `humidity`, `light`, `soilHumidity` |
+| Equipment keys | `water_pump`, `led_light`, `fan` |
 
-1. 创建 Flyway 迁移脚本 `V{N}__{description}.sql`
-2. 创建 JPA Entity 类（`entity/` 包）
-3. 创建 Repository 接口（`repository/` 包）
-4. 编写 Repository 测试（测试规范见 `java.instructions.md`）
-5. 如课程演示需要种子数据，更新 `EssentialDataSeeder`
-6. 更新 README.md「Data Model」和 `docs/api-endpoints.md`
+修改种子数据时，同步 Entity、迁移脚本、`README.md`、`docs/api-endpoints.md` 和相关前端文档。
+
+## New Table Checklist
+
+1. 新增 Flyway 迁移脚本。
+2. 新增 Entity。
+3. 新增 Repository。
+4. 新增 Repository 测试。
+5. 如果课程演示需要默认数据，更新 `EssentialDataSeeder`。
+6. 同步 `README.md` 的 Data Model 和 `docs/api-endpoints.md`。
+7. 追加 `CHANGELOG.md`。

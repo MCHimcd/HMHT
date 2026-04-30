@@ -1,42 +1,48 @@
-# HMHT 课程版后端开发约束
+# HMHT Course Edition Instructions
 
-> HMHT 课程版是智慧农业系统的精简 Spring Boot 后端，只保留 REST API、MySQL 持久化、固定模拟节点和课程演示数据。不包含 MQTT、Python、硬件、InfluxDB 或多运行模式。
+## Purpose
 
-## 编码指令文件索引
+HMHT 课程版是智慧农业系统的精简实现：Spring Boot 后端、Vue 3 前端、MySQL 持久化、Flyway 迁移、固定模拟节点和课程演示数据。
 
-| 文件 | 用途 | 适用范围 |
-|------|------|----------|
-| `instructions/java.instructions.md` | Java 编码规范、Service 模式、测试规范、API 约定 | `src/**/*.java` |
-| `instructions/database.instructions.md` | Flyway 迁移、Entity 编写、Repository 模式 | `entity/`、`repository/`、`db/migration/` |
+## Instruction Files
 
-## 核心原则
+| File | Scope |
+|------|-------|
+| `.github/instructions/java.instructions.md` | Java 编码、Service 模式、API 响应、测试 |
+| `.github/instructions/database.instructions.md` | Entity、Repository、Flyway 迁移、种子数据 |
+| `AGENTS.md` | Codex 入口规则、文档同步和验证要求 |
 
-1. **主动确认** — 需求不清时先提问，不基于猜测编写代码。
-2. **测试同步** — 所有增删改操作必须同步更新测试。
-3. **文档同步** — Controller、Service、Entity、环境变量、迁移、固定课程数据变化时，同步 `README.md` 与 `docs/api-endpoints.md`。
-4. **Changelog 同步** — 每次修改完成后为 `CHANGELOG.md` 追加本次变更记录。
+## Project Boundaries
 
-## 课程版边界
+- 固定课程版运行形态，不增加 `mock`、`bridge`、`hardware`、`full` 等运行模式。
+- 固定节点：`SIM_Node_01`。
+- 固定传感器类型：`temperature`、`humidity`、`light`、`soilHumidity`。
+- 固定设备类型：`water_pump`、`led_light`、`fan`。
+- 不引入 MQTT、Python、真实硬件、InfluxDB、设备能力快照、命令 ACK 闭环或外部时序数据。
 
-- 运行形态固定为课程版，不增加 `mock`、`bridge`、`hardware`、`full` 等运行模式。
-- 固定模拟节点为 `SIM_Node_01`。
-- 固定传感器类型为 `temperature`、`humidity`、`light`、`soilHumidity`。
-- 固定设备类型为 `water_pump`、`led_light`、`fan`。
-- 不引入 MQTT、Python、硬件、InfluxDB、设备能力快照、命令 ACK 闭环或外部时序数据。
+## Workflow Rules
 
-## 代码风格要点
+- 需求不清时先确认，再实现。
+- 增删改业务行为时，同步新增或更新测试。
+- Java 变更最终运行 `./gradlew clean bootJar` 和 `./gradlew test`。
+- 前端变更按 `frontend/package.json` 运行对应构建或测试脚本。
+- 每次完成修改后，在 `CHANGELOG.md` 追加变更记录。
 
-- **Java 版本**：Java 25。
-- **依赖注入**：必须构造器注入，禁止字段 `@Autowired`。
-- **DTO**：优先使用 Java `record`。
-- **Entity**：`@Getter @Setter`，不用 `@Data`。
-- **响应格式**：统一 `ApiResponse<T>`，业务错误抛 `BizException`。
+## Documentation Sync
 
-## 最终验证
+以下内容发生变化时，同步 `README.md`、`docs/api-endpoints.md` 和相关 `docs/*.md`：
 
-Java 变更必须通过：
+- Controller 路径、请求体、响应体或认证要求
+- Service 行为、业务错误码或课程数据
+- Entity、Repository、Flyway 迁移或默认环境变量
+- 固定账号、节点、传感器类型、设备类型
+- 前端路由、请求封装、运行脚本或代理方式
 
-```bash
-./gradlew clean bootJar
-./gradlew test
-```
+## Java Style
+
+- Java 版本：25。
+- 依赖注入：构造器注入，禁止字段 `@Autowired`。
+- DTO：优先使用 Java `record`。
+- Entity：使用 `@Getter @Setter`，不用 `@Data`。
+- Controller：统一返回 `ApiResponse<T>`。
+- 业务错误：抛出 `BizException`，由 `GlobalExceptionHandler` 处理。

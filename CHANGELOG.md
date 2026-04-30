@@ -4,6 +4,13 @@ This file tracks HMHT project changes from this task onward.
 
 Tracking starts on `2026-04-14`. Earlier project history is not backfilled here.
 
+## 2026-05-02
+
+- Replaced the legacy equipment-statistics fallback node with the course node `SIM_Node_01` and updated the related controller test and API docs.
+- Reorganized AI instruction documents with English section titles, repository-relative links, clearer priority rules, and reduced duplicated project constraints.
+- Refreshed README and general docs to match the current course edition, Vue 3 frontend implementation, deployment workflow, route map, API request shapes, and frontend run scripts.
+- Corrected documentation for the current datasource fallback password and the alert/equipment request payload formats used by the implementation.
+
 ## 2026-04-25
 
 - Added the Spring Boot 4 Flyway auto-configuration module so database migrations run before JPA schema validation during backend startup.
