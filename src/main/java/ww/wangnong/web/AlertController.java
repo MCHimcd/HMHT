@@ -44,13 +44,16 @@ public class AlertController {
         return ApiResponse.ok(alertService.queryAlerts(query));
     }
 
-    record HandleRequest(Map<String, Object> data) {
-    }
-
     @PostMapping("/handle")
-    public ApiResponse<?> handleAlert(@RequestBody HandleRequest req) {
-        String alertId = String.valueOf(req.data().get("alert_id"));
-        String action = String.valueOf(req.data().getOrDefault("action", "handle"));
+    public ApiResponse<?> handleAlert(@RequestBody Map<String, Object> body) {
+        @SuppressWarnings("unchecked")
+        Map<String, Object> data = body.get("data") instanceof Map<?, ?> map
+                ? (Map<String, Object>) map
+                : body;
+
+        Object idValue = data.getOrDefault("alert_id", data.get("alertId"));
+        String alertId = idValue == null ? "" : String.valueOf(idValue);
+        String action = String.valueOf(data.getOrDefault("action", "handle"));
         alertService.handleAlert(alertId, action);
         return ApiResponse.ok();
     }

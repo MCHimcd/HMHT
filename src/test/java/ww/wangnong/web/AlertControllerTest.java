@@ -1,7 +1,9 @@
 package ww.wangnong.web;
 
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -55,6 +57,20 @@ class AlertControllerTest {
                                                 {"data":{"alert_id":"ALT-001","action":"handle"}}"""))
                                 .andExpect(status().isOk())
                                 .andExpect(jsonPath("$.code").value(200));
+
+                verify(alertService).handleAlert(eq("ALT-001"), eq("handle"));
+        }
+
+        @Test
+        void handleAlert_acceptsCamelCaseRootPayload() throws Exception {
+                mockMvc.perform(post("/v1/alerts/handle")
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content("""
+                                                {"alertId":"ALT-002","action":"handle"}"""))
+                                .andExpect(status().isOk())
+                                .andExpect(jsonPath("$.code").value(200));
+
+                verify(alertService).handleAlert(eq("ALT-002"), eq("handle"));
         }
 
         @Test

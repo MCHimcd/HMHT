@@ -95,6 +95,11 @@ public class DatabaseAlertService implements AlertService {
             items = items.stream().filter(a -> a.type().equals(filterType)).toList();
         }
 
+        String nodeId = str(query.getOrDefault("node_id", query.get("nodeId")));
+        if (!nodeId.isEmpty()) {
+            items = items.stream().filter(a -> a.nodeId().equals(nodeId)).toList();
+        }
+
         String filterStatus = str(query.getOrDefault("filter_status", ""));
         if ("handled".equalsIgnoreCase(filterStatus)) {
             items = items.stream().filter(AlertInfo::isHandled).toList();

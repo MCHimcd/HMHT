@@ -136,6 +136,11 @@
 | `docs/api-endpoints.md` | API 文档 |
 | `docs/course-team-split.md` | 五人分工文档 |
 | `docs/deployment.md` | 部署说明 |
+| `docs/frontend-requirements.md` | 前端需求范围文档 |
+| `docs/frontend-page-flow.md` | 前端页面流程文档 |
+| `docs/frontend-api-mapping.md` | 前端页面与后端接口映射文档 |
+| `docs/frontend-state-and-auth.md` | 前端状态与认证约定文档 |
+| `docs/frontend-env-and-run.md` | 前端环境与运行约定文档 |
 | `src/main/java/ww/wangnong/entity/ScheduledTask.java` | 定时任务实体 |
 | `src/main/java/ww/wangnong/repository/ScheduledTaskRepository.java` | 定时任务仓库 |
 | `src/main/java/ww/wangnong/service/ScheduledTaskService.java` | 定时任务服务接口 |

@@ -4,6 +4,19 @@ This file tracks HMHT project changes from this task onward.
 
 Tracking starts on `2026-04-14`. Earlier project history is not backfilled here.
 
+## 2026-04-25
+
+- Added the Spring Boot 4 Flyway auto-configuration module so database migrations run before JPA schema validation during backend startup.
+- Reworked the authenticated frontend shell and node detail page to match the green-white smart agriculture dashboard concept with dense sidebar navigation, top status bar, KPI cards, trend chart, device statistics, alerts, and task tables.
+- Switched local frontend API calls to the Vite `/api` proxy by default for reliable browser-based backend integration.
+- Implemented the Vue 3 course frontend under `frontend/` with authentication, dashboard, node details, sensor charts, equipment stats, alerts, scheduled tasks, profile, admin management, operation logs, tests, and green-white smart agriculture styling.
+- Updated frontend API mapping and run documentation to match the implemented request shapes and verification commands.
+- Added ignore rules for macOS metadata, frontend local dependencies, and Vite build output.
+- Reduced the frontend chart bundle by registering only the ECharts modules used by the course pages.
+- Added frontend preparation docs for requirements, page flow, API mapping, state/auth rules, and local environment/run conventions.
+- Updated README and course team ownership docs to reference the new frontend documentation.
+- Switched the recommended frontend stack in documentation from React to Vue 3 with Pinia, Vue Router, and ECharts.
+
 ## 2026-04-23
 
 - Cut HMHT down to a Java 25 course edition with a single fixed runtime shape.

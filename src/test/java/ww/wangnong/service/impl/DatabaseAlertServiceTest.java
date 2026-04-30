@@ -187,6 +187,20 @@ class DatabaseAlertServiceTest {
         assertThat(result.items().getFirst().type()).isEqualTo("temperature");
     }
 
+    @Test
+    void queryAlerts_filterByNodeId_filtersItems() {
+        Alert a1 = stubAlert("ALT-001", false);
+        a1.setNodeId("N01");
+        Alert a2 = stubAlert("ALT-002", false);
+        a2.setNodeId("N02");
+        when(alertRepo.findAll(any(Sort.class))).thenReturn(List.of(a1, a2));
+
+        AlertListResult result = service.queryAlerts(Map.of("node_id", "N02"));
+
+        assertThat(result.total()).isEqualTo(1);
+        assertThat(result.items().getFirst().nodeId()).isEqualTo("N02");
+    }
+
     // ── queryAlerts pagination ──
 
     @Test

@@ -77,6 +77,39 @@ Expected artifact:
 build/libs/HMHT-0.0.1-SNAPSHOT.jar
 ```
 
+## Frontend
+
+The course frontend lives in `frontend/` and uses Vite, Vue 3, TypeScript, Pinia, Vue Router, and ECharts.
+
+```bash
+cd frontend
+npm install
+npm run dev
+```
+
+Default local addresses:
+
+| Service | URL |
+|---------|-----|
+| Frontend | `http://localhost:5173` |
+| Backend API | `http://localhost:8080/api` |
+
+Frontend environment example:
+
+```dotenv
+VITE_API_BASE_URL=/api
+```
+
+The Vite dev server proxies `/api` to `http://127.0.0.1:8080` for local browser testing.
+
+Build and test:
+
+```bash
+cd frontend
+npm run build
+npm run test
+```
+
 ## API Surface
 
 Base path: `/api`.
@@ -127,4 +160,9 @@ Detailed endpoint documentation is maintained in [docs/api-endpoints.md](docs/ap
 | [docs/api-endpoints.md](docs/api-endpoints.md) | Course edition API reference |
 | [docs/course-team-split.md](docs/course-team-split.md) | Five-person file ownership split |
 | [docs/deployment.md](docs/deployment.md) | Local deployment notes |
+| [docs/frontend-requirements.md](docs/frontend-requirements.md) | Frontend scope and acceptance criteria |
+| [docs/frontend-page-flow.md](docs/frontend-page-flow.md) | Frontend routes, navigation, and page states |
+| [docs/frontend-api-mapping.md](docs/frontend-api-mapping.md) | Page-to-API mapping for frontend integration |
+| [docs/frontend-state-and-auth.md](docs/frontend-state-and-auth.md) | Frontend token, state, and error handling rules |
+| [docs/frontend-env-and-run.md](docs/frontend-env-and-run.md) | Frontend environment, local run, and deployment notes |
 | [CHANGELOG.md](CHANGELOG.md) | Change history |

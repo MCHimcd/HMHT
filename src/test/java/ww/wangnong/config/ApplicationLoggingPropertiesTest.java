@@ -26,4 +26,13 @@ class ApplicationLoggingPropertiesTest {
         assertThat(properties.getProperty("logging.level.org.hibernate.SQL")).isEqualTo("INFO");
         assertThat(properties.getProperty("logging.level.org.hibernate.orm.jdbc.bind")).isEqualTo("INFO");
     }
+
+    @Test
+    void buildIncludesFlywayBootAutoConfigurationModule() throws Exception {
+        String buildFile = Files.readString(Path.of("build.gradle"));
+
+        assertThat(buildFile).contains("org.springframework.boot:spring-boot-flyway");
+        assertThat(buildFile).contains("org.flywaydb:flyway-core");
+        assertThat(buildFile).contains("org.flywaydb:flyway-mysql");
+    }
 }
