@@ -85,6 +85,7 @@ const emptyPoints = computed<HistoryPoint[]>(() => trendSeries.value[0]?.points 
 
 const unhandledAlerts = computed(() => alerts.value?.items.filter((item) => !item.is_handled) ?? []);
 const handledAlerts = computed(() => alerts.value?.items.filter((item) => item.is_handled) ?? []);
+const unhandledAlertCount = computed(() => alerts.value?.unhandled_count ?? unhandledAlerts.value.length);
 const filteredAlerts = computed(() => {
   if (activeAlertTab.value === "unhandled") return unhandledAlerts.value;
   if (activeAlertTab.value === "handled") return handledAlerts.value;
@@ -92,8 +93,8 @@ const filteredAlerts = computed(() => {
 });
 
 const todayTasks = computed(() => tasks.value.slice(0, 4));
-const deviceSummary = computed(() => buildDeviceRuntimeSummary(equipment.value, unhandledAlerts.value.length > 0));
-const healthScore = computed(() => Math.max(80, 96 - unhandledAlerts.value.length * 4));
+const deviceSummary = computed(() => buildDeviceRuntimeSummary(equipment.value, unhandledAlertCount.value > 0));
+const healthScore = computed(() => Math.max(80, 96 - unhandledAlertCount.value * 4));
 const runningPercent = computed(() =>
   deviceSummary.value.total ? Math.round((deviceSummary.value.running / deviceSummary.value.total) * 100) : 0,
 );
@@ -132,10 +133,10 @@ const summaryCards = computed(() => [
     label: "今日告警",
     value: String(alertCount(alerts.value)),
     suffix: "条",
-    helper: `未处理 ${unhandledAlerts.value.length}`,
+    helper: `未处理 ${unhandledAlertCount.value}`,
     icon: BellRing,
     tone: "orange",
-    progress: Math.min(100, 24 + unhandledAlerts.value.length * 18),
+    progress: Math.min(100, 24 + unhandledAlertCount.value * 18),
   },
   {
     label: "关联设备",
@@ -209,7 +210,7 @@ async function markHandled(alert: AlertInfo) {
 watch(nodeId, () => void load(), { immediate: true });
 
 onMounted(() => {
-  refreshTimer = window.setInterval(() => void loadLiveData(), 15000);
+  refreshTimer = window.setInterval(() => void loadLiveData(), 2000);
   tickTimer = window.setInterval(() => {
     now.value = Date.now();
   }, 1000);
@@ -305,8 +306,8 @@ onBeforeUnmount(() => {
             <RouterLink to="/alerts">更多</RouterLink>
           </div>
           <div class="tab-row">
-            <button :class="{ active: activeAlertTab === 'all' }" type="button" @click="activeAlertTab = 'all'">全部({{ alerts?.items.length ?? 0 }})</button>
-            <button :class="{ active: activeAlertTab === 'unhandled' }" type="button" @click="activeAlertTab = 'unhandled'">未处理({{ unhandledAlerts.length }})</button>
+            <button :class="{ active: activeAlertTab === 'all' }" type="button" @click="activeAlertTab = 'all'">全部({{ alerts?.total ?? 0 }})</button>
+            <button :class="{ active: activeAlertTab === 'unhandled' }" type="button" @click="activeAlertTab = 'unhandled'">未处理({{ unhandledAlertCount }})</button>
             <button :class="{ active: activeAlertTab === 'handled' }" type="button" @click="activeAlertTab = 'handled'">已处理({{ handledAlerts.length }})</button>
           </div>
           <div class="compact-table-wrap">

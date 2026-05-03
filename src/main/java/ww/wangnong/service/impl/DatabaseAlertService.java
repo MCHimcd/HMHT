@@ -100,6 +100,10 @@ public class DatabaseAlertService implements AlertService {
             items = items.stream().filter(a -> a.nodeId().equals(nodeId)).toList();
         }
 
+        int unhandledCount = (int) items.stream().filter(a -> !a.isHandled()).count();
+        int handledRecentCount = (int) Math.min(10,
+                items.stream().filter(AlertInfo::isHandled).count());
+
         String filterStatus = str(query.getOrDefault("filter_status", ""));
         if ("handled".equalsIgnoreCase(filterStatus)) {
             items = items.stream().filter(AlertInfo::isHandled).toList();
@@ -108,9 +112,6 @@ public class DatabaseAlertService implements AlertService {
         }
 
         int total = items.size();
-        int unhandledCount = (int) items.stream().filter(a -> !a.isHandled()).count();
-        int handledRecentCount = (int) Math.min(10,
-                items.stream().filter(AlertInfo::isHandled).count());
         int start = Math.min((page - 1) * size, total);
         int end = Math.min(start + size, total);
 

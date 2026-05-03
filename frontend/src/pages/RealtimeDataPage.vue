@@ -68,7 +68,7 @@ async function load() {
 watch(nodeId, () => void load(), { immediate: true });
 
 onMounted(() => {
-  refreshTimer = window.setInterval(() => void load(), 15000);
+  refreshTimer = window.setInterval(() => void load(), 2000);
 });
 
 onBeforeUnmount(() => {
@@ -82,7 +82,7 @@ onBeforeUnmount(() => {
       <div>
         <p class="eyebrow">Realtime</p>
         <h1>实时数据</h1>
-        <p class="muted">{{ nodeId }} · 每 15 秒自动刷新一次，适合查看当前环境波动。</p>
+        <p class="muted">{{ nodeId }} · 每 2 秒自动刷新一次，适合查看当前环境波动。</p>
       </div>
       <button class="button" type="button" @click="load"><RefreshCcw :size="17" />刷新</button>
     </header>

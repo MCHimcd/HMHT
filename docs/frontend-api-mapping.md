@@ -77,6 +77,8 @@ Supported `metric`: `temperature`, `humidity`, `light`, `soilHumidity`.
 
 Supported `range`: `24h`, `7d`, `30d`.
 
+Course simulation history is rolling and stable: the first request initializes the point list, and each later request appends only the newest point while preserving the previous points already shown by the chart.
+
 Response fields:
 
 | Field | Type | Frontend Usage |
@@ -101,7 +103,7 @@ Frontend should always send `node_id`. If it is omitted, the backend falls back 
 
 | Action | Method And Path | Request | Response Focus |
 |--------|-----------------|---------|----------------|
-| 查询告警 | `POST /v1/alerts/list` | `{ "query": { "node_id": "SIM_Node_01", "filter_status": "unhandled", "page": 1, "pageSize": 10 } }` | `total`, `unhandled_count`, `items` |
+| 查询告警 | `POST /v1/alerts/list` | `{ "query": { "node_id": "SIM_Node_01", "filter_status": "unhandled", "page": 1, "pageSize": 10 } }` | `total`, scoped `unhandled_count`, `items` |
 | 处理告警 | `POST /v1/alerts/handle` | `{ "data": { "alert_id": "COURSE_ALERT_1", "action": "handle" } }` | `null` |
 
 `filter_status` values:
@@ -112,7 +114,9 @@ Frontend should always send `node_id`. If it is omitted, the backend falls back 
 | `unhandled` | 未处理 |
 | `handled` | 已处理 |
 
-Alert response fields use `snake_case`: `alert_id`, `node_id`, `type_name`, `source_name`, `is_handled`, `unhandled_count`, `handled_recent_count`.
+Alert response fields use `snake_case`: `alert_id`, `node_id`, `type_name`, `source_name`, `is_handled`, `unhandled_count`, `handled_recent_count`. The frontend accepts both snake_case and camelCase alert fields defensively, but new backend responses should keep snake_case.
+
+Realtime dashboard surfaces refresh their sensor and alert summaries every 2 seconds. During demos, the simulated 24h air-temperature stream periodically drops below `5C`; the backend then creates a low-temperature warning after the refresh loop observes that value.
 
 ## Scheduled Tasks
 

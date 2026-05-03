@@ -20,7 +20,7 @@ import {
   Waves,
   Workflow,
 } from "lucide-vue-next";
-import { computed, ref, watch } from "vue";
+import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { RouterLink, useRoute, useRouter } from "vue-router";
 
 import { listAlerts } from "../api/alerts";
@@ -34,12 +34,14 @@ const router = useRouter();
 const auth = useAuthStore();
 const mobileOpen = ref(false);
 const collapsed = ref(false);
+const userMenuOpen = ref(false);
 const unhandledCount = ref(0);
 const quickMetrics = ref([
   { label: "空气温度", value: "-", icon: Thermometer, color: "#1884e8" },
   { label: "空气湿度", value: "-", icon: Activity, color: "#00a870" },
   { label: "土壤湿度", value: "-", icon: Waves, color: "#0aa55c" },
 ]);
+let summaryTimer: number | undefined;
 
 const currentNodeId = computed(() => String(route.params.nodeId || defaultNodeId));
 const sectionLabel = computed(() => String(route.meta.section || "控制台"));
@@ -137,13 +139,23 @@ watch(
   () => route.fullPath,
   () => {
     mobileOpen.value = false;
+    userMenuOpen.value = false;
   },
 );
 
 async function handleLogout() {
+  userMenuOpen.value = false;
   await auth.logout();
   await router.push("/login");
 }
+
+onMounted(() => {
+  summaryTimer = window.setInterval(() => void loadConsoleSummary(), 2000);
+});
+
+onBeforeUnmount(() => {
+  if (summaryTimer) window.clearInterval(summaryTimer);
+});
 </script>
 
 <template>
@@ -202,7 +214,16 @@ async function handleLogout() {
             <Bell :size="18" />
             <i v-if="unhandledCount > 0">{{ unhandledCount }}</i>
           </RouterLink>
-          <span class="console-user"><UserRound :size="22" />{{ auth.profile?.role === "admin" ? "管理员" : "普通用户" }}<small>{{ auth.displayName }}</small><ChevronDown :size="14" /></span>
+          <div class="console-user-menu">
+            <button class="console-user" type="button" :aria-expanded="userMenuOpen" @click="userMenuOpen = !userMenuOpen">
+              <UserRound :size="22" />{{ auth.profile?.role === "admin" ? "管理员" : "普通用户" }}<small>{{ auth.displayName }}</small>
+              <ChevronDown class="user-chevron" :class="{ open: userMenuOpen }" :size="14" />
+            </button>
+            <div v-if="userMenuOpen" class="user-popover">
+              <RouterLink :to="{ name: 'profile' }">系统设置</RouterLink>
+              <button type="button" @click="handleLogout">退出登录</button>
+            </div>
+          </div>
           <button class="top-icon" type="button" title="退出登录" aria-label="退出登录" @click="handleLogout">
             <LogOut :size="17" />
           </button>
@@ -448,13 +469,62 @@ async function handleLogout() {
 
 .console-user {
   gap: 7px;
+  border: 0;
+  border-left: 1px solid #e4eaee;
+  background: transparent;
+  color: #26333e;
   font-weight: 850;
+  min-height: 30px;
+  padding-left: 18px;
 }
 
 .console-user small {
   color: #6a757e;
   font-size: 12px;
   font-weight: 700;
+}
+
+.console-user-menu {
+  position: relative;
+}
+
+.user-chevron {
+  transition: transform 0.16s ease;
+}
+
+.user-chevron.open {
+  transform: rotate(180deg);
+}
+
+.user-popover {
+  position: absolute;
+  top: calc(100% + 10px);
+  right: 0;
+  z-index: 30;
+  display: grid;
+  min-width: 132px;
+  border: 1px solid #d9e7de;
+  border-radius: 8px;
+  padding: 6px;
+  background: #fff;
+  box-shadow: 0 14px 34px rgba(15, 35, 25, 0.14);
+}
+
+.user-popover a,
+.user-popover button {
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: #26333e;
+  padding: 9px 10px;
+  text-align: left;
+  font-weight: 750;
+}
+
+.user-popover a:hover,
+.user-popover button:hover,
+.console-user:hover {
+  background: #edf3f0;
 }
 
 .top-icon {

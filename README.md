@@ -42,7 +42,7 @@ Startup seeding is idempotent and creates the demo accounts, one simulated node,
 | Sensor types | `temperature`, `humidity`, `light`, `soilHumidity` |
 | Equipment types | `water_pump`, `led_light`, `fan` |
 
-Sensor history and equipment statistics are generated in memory for demo use. They are not read from real devices or a time-series database.
+Sensor history and equipment statistics are generated in memory for demo use. Sensor history is a rolling simulated series: refreshes append the newest point without regenerating previous chart points. They are not read from real devices or a time-series database.
 
 ## Configuration
 
@@ -126,7 +126,7 @@ Base path: `/api`. Responses use `{ "code": 200, "message": "success", "data": .
 | Auth | `/v1/auth` | verification code, register, login, profile, password, logout |
 | Node | `/v1/nodes` | demo node, fixed sensor/equipment metadata, thresholds |
 | Sensor | `/v1/sensors`, `/v1/equipment` | generated history and equipment statistics |
-| Alert | `/v1/alerts` | alert list and handling |
+| Alert | `/v1/alerts` | alert list, handling, and simulated low-temperature warnings |
 | Task | `/v1/tasks` | scheduled-task CRUD and enable toggle |
 | Admin | `/v1/admin` | user, role, node, and user-node authorization management |
 | Logs | `/v1/admin/logs` | operation log query |

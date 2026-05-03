@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { CheckCircle2, RefreshCcw } from "lucide-vue-next";
-import { onMounted, ref } from "vue";
+import { onBeforeUnmount, onMounted, ref } from "vue";
 
 import { handleAlert, listAlerts } from "../api/alerts";
 import type { AlertInfo, AlertList } from "../api/types";
@@ -15,6 +15,8 @@ const data = ref<AlertList | null>(null);
 const status = ref<"idle" | "loading" | "ready" | "empty" | "error">("idle");
 const error = ref("");
 const message = ref("");
+const handlingAlertId = ref("");
+let refreshTimer: number | undefined;
 
 function handledValue() {
   if (handledFilter.value === "unhandled") return false;
@@ -22,19 +24,25 @@ function handledValue() {
   return null;
 }
 
-async function load() {
-  status.value = "loading";
+async function load(silent = false) {
+  if (!silent) status.value = "loading";
   error.value = "";
   try {
     data.value = await listAlerts({ nodeId: defaultNodeId, handled: handledValue(), page: page.value, size });
     status.value = data.value.items.length ? "ready" : "empty";
   } catch (err) {
     error.value = errorMessage(err);
-    status.value = "error";
+    if (!silent) status.value = "error";
   }
 }
 
 async function markHandled(alert: AlertInfo) {
+  if (!alert.alert_id) {
+    message.value = "告警数据已刷新，请重新处理";
+    await load();
+    return;
+  }
+  handlingAlertId.value = alert.alert_id;
   message.value = "";
   try {
     await handleAlert(alert.alert_id);
@@ -42,6 +50,9 @@ async function markHandled(alert: AlertInfo) {
     await load();
   } catch (err) {
     message.value = errorMessage(err);
+    await load();
+  } finally {
+    handlingAlertId.value = "";
   }
 }
 
@@ -56,7 +67,14 @@ function nextPage(delta: number) {
   void load();
 }
 
-onMounted(load);
+onMounted(() => {
+  void load();
+  refreshTimer = window.setInterval(() => void load(true), 2000);
+});
+
+onBeforeUnmount(() => {
+  if (refreshTimer) window.clearInterval(refreshTimer);
+});
 </script>
 
 <template>
@@ -67,7 +85,7 @@ onMounted(load);
         <h1>告警列表与处理</h1>
         <p class="muted">{{ defaultNodeId }} · 支持未处理筛选、分页和处理操作。</p>
       </div>
-      <button class="button" type="button" @click="load"><RefreshCcw :size="17" />刷新</button>
+      <button class="button" type="button" @click="load()"><RefreshCcw :size="17" />刷新</button>
     </header>
 
     <section class="toolbar card pad">
@@ -84,7 +102,7 @@ onMounted(load);
 
     <div v-if="message" class="message" :class="message.includes('已') ? 'success' : 'error'">{{ message }}</div>
 
-    <DataState :status="status" :message="error || '暂无告警数据'" @retry="load">
+    <DataState :status="status" :message="error || '暂无告警数据'" @retry="load()">
       <section class="card pad table-wrap">
         <table>
           <thead>
@@ -105,7 +123,7 @@ onMounted(load);
               <td>{{ formatDateTime(alert.timestamp) }}</td>
               <td><span class="badge" :class="alert.is_handled ? 'teal' : 'warning'">{{ alert.is_handled ? "已处理" : "未处理" }}</span></td>
               <td>
-                <button class="button primary" type="button" :disabled="alert.is_handled" @click="markHandled(alert)">
+                <button class="button primary" type="button" :disabled="alert.is_handled || handlingAlertId === alert.alert_id" @click="markHandled(alert)">
                   <CheckCircle2 :size="16" />处理
                 </button>
               </td>

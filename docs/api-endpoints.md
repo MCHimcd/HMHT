@@ -105,6 +105,8 @@ Supported `range`:
 | `7d` | 最近 7 天 |
 | `30d` | 最近 30 天 |
 
+Sensor history is cached per `nodeId + metric + range` in the course simulation. The first request initializes the series; later requests roll the window forward by appending only the newest point and dropping the oldest point, so existing chart history remains stable during 2-second frontend polling.
+
 Equipment stats request:
 
 ```json
@@ -138,7 +140,7 @@ List request:
 }
 ```
 
-`filter_status` supports `all`, `handled`, and `unhandled`. The controller also normalizes `query.size` to `query.pageSize`.
+`filter_status` supports `all`, `handled`, and `unhandled`. The controller also normalizes `query.size` to `query.pageSize`. `unhandled_count` reports the current unhandled count for the node/type scope before status filtering, so it stays accurate on handled-list views.
 
 Handle request:
 
@@ -151,7 +153,7 @@ Handle request:
 }
 ```
 
-Alert list response fields use `snake_case`, including `unhandled_count`, `handled_recent_count`, `alert_id`, `node_id`, `type_name`, `source_name`, `is_handled`, and `handle_time`.
+Alert list response fields use `snake_case`, including `unhandled_count`, `handled_recent_count`, `alert_id`, `node_id`, `type_name`, `source_name`, `is_handled`, and `handle_time`. The course sensor simulation creates a warning alert when the generated 24h air-temperature stream produces a value below `5C`, with a short cooldown to avoid duplicate alerts during 2-second frontend refreshes.
 
 ## Scheduled Tasks
 

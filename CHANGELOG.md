@@ -4,6 +4,12 @@ This file tracks HMHT project changes from this task onward.
 
 Tracking starts on `2026-04-14`. Earlier project history is not backfilled here.
 
+## 2026-05-03
+
+- Fixed frontend alert handling by normalizing snake_case and camelCase alert fields, refreshed console/dashboard/realtime data every 2 seconds, added a working user menu, corrected alert counts, and restored the dashboard node-management icon contrast.
+- Added simulated low-temperature alert generation when the 24h air-temperature stream drops below `5C`, with a cooldown and updated alert-count semantics/docs.
+- Changed simulated sensor histories to rolling cached series so chart refreshes append only the newest point instead of regenerating previously displayed data.
+
 ## 2026-05-02
 
 - Replaced the legacy equipment-statistics fallback node with the course node `SIM_Node_01` and updated the related controller test and API docs.

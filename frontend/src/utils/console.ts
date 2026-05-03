@@ -71,5 +71,5 @@ export function buildDeviceRuntimeSummary(equipment: EquipmentMeta[], hasActiveA
 }
 
 export function alertCount(alerts: AlertList | null) {
-  return alerts?.items.length ?? 0;
+  return alerts?.total ?? alerts?.items.length ?? 0;
 }

@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { Activity, Bell, ChartLine, RefreshCcw, Server, Sprout } from "lucide-vue-next";
-import { computed, onMounted, ref } from "vue";
+import { computed, onBeforeUnmount, onMounted, ref } from "vue";
 import { RouterLink } from "vue-router";
 
 import { listAlerts } from "../api/alerts";
@@ -16,6 +16,7 @@ const error = ref("");
 const nodes = ref<NodeInfo[]>([]);
 const health = ref<HealthData | null>(null);
 const alertSummary = ref<AlertList | null>(null);
+let refreshTimer: number | undefined;
 
 const defaultNode = computed(() => nodes.value[0] || { id: defaultNodeId, name: "课程模拟温室节点", status: "online" });
 const summaryCards = computed(() => [
@@ -25,8 +26,8 @@ const summaryCards = computed(() => [
   { label: "数据来源", value: health.value?.dataSimulated ? "模拟数据" : "真实数据", accent: "" },
 ]);
 
-async function load() {
-  status.value = "loading";
+async function load(silent = false) {
+  if (!silent) status.value = "loading";
   error.value = "";
   try {
     const [healthResult, nodeResult, alertResult] = await Promise.all([
@@ -40,11 +41,18 @@ async function load() {
     status.value = nodeResult.length ? "ready" : "empty";
   } catch (err) {
     error.value = errorMessage(err);
-    status.value = "error";
+    if (!silent) status.value = "error";
   }
 }
 
-onMounted(load);
+onMounted(() => {
+  void load();
+  refreshTimer = window.setInterval(() => void load(true), 2000);
+});
+
+onBeforeUnmount(() => {
+  if (refreshTimer) window.clearInterval(refreshTimer);
+});
 </script>
 
 <template>
@@ -55,7 +63,7 @@ onMounted(load);
         <h1>首页总览</h1>
         <p class="muted">以固定模拟节点 {{ defaultNodeId }} 为主线，展示控制台总览和常用入口。</p>
       </div>
-      <button class="button" type="button" @click="load">
+      <button class="button" type="button" @click="load()">
         <RefreshCcw :size="17" />刷新
       </button>
     </header>
@@ -134,7 +142,7 @@ onMounted(load);
   font-size: 24px;
 }
 
-.node-panel svg {
+.node-panel > .toolbar svg {
   color: var(--green);
 }
 

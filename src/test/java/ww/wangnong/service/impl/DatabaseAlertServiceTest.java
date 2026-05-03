@@ -100,7 +100,22 @@ class DatabaseAlertServiceTest {
         AlertListResult result = service.queryAlerts(Map.of("filter_status", "unhandled"));
 
         assertThat(result.total()).isEqualTo(1);
+        assertThat(result.unhandledCount()).isEqualTo(1);
         assertThat(result.items()).allMatch(i -> !i.isHandled());
+    }
+
+    @Test
+    void queryAlerts_handledFilter_keepsScopeUnhandledCount() {
+        Alert a1 = stubAlert("ALT-001", false);
+        Alert a2 = stubAlert("ALT-002", true);
+        a2.setHandleTime(LocalDateTime.now());
+        when(alertRepo.findAll(any(Sort.class))).thenReturn(List.of(a1, a2));
+
+        AlertListResult result = service.queryAlerts(Map.of("filter_status", "handled"));
+
+        assertThat(result.total()).isEqualTo(1);
+        assertThat(result.unhandledCount()).isEqualTo(1);
+        assertThat(result.items()).allMatch(AlertInfo::isHandled);
     }
 
     // ── handleAlert ──

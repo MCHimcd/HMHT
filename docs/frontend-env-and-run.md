@@ -127,7 +127,7 @@ Current scripts from `frontend/package.json`:
 | Node visible | 控制台或节点详情展示 `SIM_Node_01` |
 | Sensor chart | 历史数据页有 `points` |
 | Equipment stats | 设备统计页有趋势数据 |
-| Alert handling | 告警处理后列表刷新 |
+| Alert handling | 告警处理后列表刷新，未处理计数与铃铛角标同步 |
 | Task CRUD | 任务新增、编辑、启停、删除可完成 |
 | Frontend build | `cd frontend && npm run build` |
 | Frontend test | `cd frontend && npm run test` |
@@ -142,3 +142,5 @@ Current scripts from `frontend/package.json`:
 | Same server Nginx | Nginx serves static files and reverse-proxies `/api` to `localhost:8080` |
 
 For classroom demos, local frontend + local backend is the preferred path.
+
+Realtime views and the console top bar poll every 2 seconds. Sensor charts use a rolling simulated history: older points stay stable, and each refresh appends only the newest point. The simulated air-temperature stream periodically produces a value below `5C`, which generates a low-temperature warning after a short backend cooldown.
