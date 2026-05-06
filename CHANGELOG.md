@@ -40,6 +40,7 @@ Tracking starts on `2026-04-14`. Earlier project history is not backfilled here.
 - Updated tests, README, API docs, deployment notes, and project instructions for the course edition.
 - Added `docs/course-team-split.md` with file-level ownership for the five-person course split.
 - Rebalanced `docs/course-team-split.md` around Java source line counts for the five-person split.
+- Extended `docs/course-team-split.md` to include frontend ownership and rebalanced around major language code lines.
 
 ## 2026-04-14
 
