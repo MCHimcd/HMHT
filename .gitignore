@@ -40,6 +40,7 @@ out/
 ### Runtime logs ###
 logs/
 .start-runtime
+output/
 
 ### Frontend ###
 frontend/node_modules/

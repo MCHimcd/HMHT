@@ -26,7 +26,6 @@ HMHT 课程版是智慧农业系统的精简实现：Spring Boot 后端、Vue 3 
 - 增删改业务行为时，同步新增或更新测试。
 - Java 变更最终运行 `./gradlew clean bootJar` 和 `./gradlew test`。
 - 前端变更按 `frontend/package.json` 运行对应构建或测试脚本。
-- 每次完成修改后，在 `CHANGELOG.md` 追加变更记录。
 
 ## Documentation Sync
 

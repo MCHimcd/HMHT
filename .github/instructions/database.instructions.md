@@ -94,4 +94,3 @@ public interface XxxRepository extends JpaRepository<Xxx, Long> {
 4. 新增 Repository 测试。
 5. 如果课程演示需要默认数据，更新 `EssentialDataSeeder`。
 6. 同步 `README.md` 的 Data Model 和 `docs/api-endpoints.md`。
-7. 追加 `CHANGELOG.md`。

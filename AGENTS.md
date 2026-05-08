@@ -15,7 +15,7 @@ No `agent.md` file is maintained in this repository; `AGENTS.md` is the agent en
 
 - Clarify requirements before implementation when scope, behavior, or ownership is ambiguous.
 - Update tests first or together with implementation.
-- Append the final change record to `CHANGELOG.md` for every completed modification.
+- Write documentation with English titles/headings and Chinese detailed content.
 - Do not modify source code for documentation-only tasks.
 
 ## Project Boundaries
@@ -31,7 +31,6 @@ When controllers, services, entities, environment variables, migrations, fixed c
 - `README.md`
 - `docs/api-endpoints.md`
 - related `docs/*.md`
-- `CHANGELOG.md`
 
 ## Java Rules
 
